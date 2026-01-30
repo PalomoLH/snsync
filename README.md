@@ -34,6 +34,13 @@ export SN_ENC_SECRET="a-very-secure-secret-phrase-only-you-know"
 ```
 Then reload: `source ~/.zshrc`.
 
+### 3. Optional: Terminal alias (Zsh)
+To run `snsync` from anywhere, add to your `~/.zshrc`:
+```bash
+alias snsync='node /Users/palomo/workspace/sn/_tool/sn-sync.js'
+```
+Then reload: `source ~/.zshrc`. Adjust the path if your repo lives elsewhere.
+
 ---
 
 ## 📂 Folder Structure
