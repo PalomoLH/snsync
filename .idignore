@@ -1,0 +1,9 @@
+# Ignora todos os arquivos .env em qualquer subpasta
+**/.env
+**/.env.*
+
+# Ignora pastas de contexto de IA para não poluir buscas
+**/.ai_context/
+
+# Ignora credenciais ou configs locais do VS Code
+**/.vscode/

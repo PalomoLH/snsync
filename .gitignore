@@ -1,0 +1,20 @@
+# --- Dependencies and Logs ---
+node_modules/
+npm-debug.log
+.DS_Store
+
+# --- Security / Sensitive Data ---
+.env
+.env.*
+.token_cache.json
+*_key.pem
+
+# --- Projects (Customer Data) ---
+# Ignore everything inside projects, except an empty file to keep the folder
+projects/*
+!projects/.gitkeep
+
+# --- AI Context and Metadata ---
+**/.ai_context/
+**/.sys_id
+**/.sys_updated_on
