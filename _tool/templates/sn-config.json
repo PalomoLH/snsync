@@ -1,0 +1,106 @@
+{
+    "mapping": {
+        "sys_script_include": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": ["script"],
+            "ext": { "script": "js" },
+            "saveContext": true
+        },
+        "sys_script_client": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": ["script"],
+            "ext": { "script": "js" },
+            "saveContext": true
+        },
+        "sys_script": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": ["script"],
+            "ext": { "script": "js" },
+            "saveContext": true
+        },
+        "sys_ui_script": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": ["script"],
+            "ext": { "script": "js" },
+            "saveContext": true
+        },
+        "sys_ui_action": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": ["script", "client_script_v2"],
+            "ext": { "script": "server.js", "client_script_v2": "client.js" },
+            "saveContext": true
+        },
+        "sysauto_script": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": ["script"],
+            "ext": { "script": "js" },
+            "saveContext": true
+        },
+        "sysevent_script_action": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": ["script"],
+            "ext": { "script": "js" },
+            "saveContext": true
+        },
+        "sp_widget": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": ["template", "script", "client_script", "css", "link", "demo_data"],
+            "ext": { "template": "html", "script": "server.js", "client_script": "client.js", "css": "scss", "link": "link.js", "demo_data": "json" },
+            "saveContext": true
+        },
+        "sp_angular_provider": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": ["script", "template"],
+            "ext": { "script": "js", "template": "html" },
+            "saveContext": true
+        },
+        "sp_css": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": ["css"],
+            "ext": { "css": "css" },
+            "saveContext": true
+        },
+        "sp_theme": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": ["css_variables"],
+            "ext": { "css_variables": "scss" },
+            "saveContext": true
+        },
+        "sp_page": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": ["css", "internal_content_css"],
+            "ext": { "css": "scss", "internal_content_css": "css" },
+            "saveContext": true
+        },
+        "sys_ui_macro": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": ["xml"],
+            "ext": { "xml": "xml" },
+            "saveContext": true
+        },
+        "sys_ui_page": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": ["html", "client_script", "processing_script"],
+            "ext": { "html": "html", "client_script": "client.js", "processing_script": "server.js" },
+            "saveContext": true
+        },
+        "sys_ui_policy": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": ["script_true", "script_false"],
+            "ext": { "script_true": "true.js", "script_false": "false.js" },
+            "saveContext": true
+        },
+        "sys_ws_operation": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": ["operation_script"],
+            "ext": { "operation_script": "js" },
+            "saveContext": true
+        },
+        "sys_script_email": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": ["script"],
+            "ext": { "script": "js" },
+            "saveContext": true
+        }
+    }
+}
