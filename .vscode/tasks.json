@@ -1,0 +1,212 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "SN: Open Record in Browser 🌎",
+            "type": "shell",
+            "command": "node",
+            "args": [
+                "${workspaceFolder}/_tool/sn-sync.js",
+                "--open",
+                "${file}",
+                "--project",
+                "${fileDirname}" 
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared"
+            },
+            "problemMatcher": [],
+            "group": "build"
+        },
+        {
+            "label": "SN: Push Current File ⬆️",
+            "type": "shell",
+            "command": "node",
+            "args": [
+                "${workspaceFolder}/_tool/sn-sync.js",
+                "--push",
+                "${file}",
+                "--project",
+                "${fileDirname}"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": [],
+            "group": "build"
+        },
+        {
+            "label": "SN: Pull (Download) Project ⬇️",
+            "type": "shell",
+            "command": "node",
+            "args": [
+                "${workspaceFolder}/_tool/sn-sync.js",
+                "--pull",
+                "--project",
+                "${input:pickProject}"
+            ],
+            "problemMatcher": [],
+            "group": "build"
+        },
+        {
+            "label": "SN: Pull Current Record Only ⬇️",
+            "type": "shell",
+            "command": "node",
+            "args": [
+                "${workspaceFolder}/_tool/sn-sync.js",
+                "--pull",
+                "--target",
+                "${file}",
+                "--project",
+                "${fileDirname}"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": [],
+            "group": "build"
+        },
+        {
+            "label": "SN: Pull Custom (Query) 🔍",
+            "type": "shell",
+            "command": "node",
+            "args": [
+                "${workspaceFolder}/_tool/sn-sync.js",
+                "--pull",
+                "--project",
+                "${input:pickProject}",
+                "--table",
+                "${input:enterTable}",
+                "--query",
+                "${input:enterQuery}"
+            ],
+            "problemMatcher": [],
+            "group": "build"
+        },
+        {
+            "label": "SN: Push Custom (Folder) 📦",
+            "type": "shell",
+            "command": "node",
+            "args": [
+                "${workspaceFolder}/_tool/sn-sync.js",
+                "--push",
+                "--project",
+                "${input:pickProject}",
+                "--table",
+                "${input:enterTable}",
+                "--name",
+                "${input:enterFolderName}"
+            ],
+            "problemMatcher": [],
+            "group": "build"
+        },
+        {
+            "label": "SN: Watch (Monitor) Project 👀",
+            "type": "shell",
+            "command": "node",
+            "args": [
+                "${workspaceFolder}/_tool/sn-sync.js",
+                "--watch",
+                "--project",
+                "${input:pickProject}"
+            ],
+            "isBackground": true,
+            "problemMatcher": [],
+            "group": "build"
+        },
+        {
+            "label": "SN: Create New Project 🆕",
+            "type": "shell",
+            "command": "node",
+            "args": [
+                "${workspaceFolder}/_tool/create-project.js",
+                "--name", "${input:newProjectName}",
+                "--instance", "${input:newInstanceUrl}",
+                "--clientId", "${input:newClientId}",
+                "--clientSecret", "${input:newClientSecret}",
+                "--user", "${input:newUser}",
+                "--password", "${input:newPassword}"
+            ],
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "group": "build"
+        }
+    ],
+    "inputs": [
+        {
+            "id": "pickProject",
+            "type": "pickString",
+            "description": "Select Project to Sync:",
+            "options": [
+
+                "projects/levidev"
+            ],
+            "default": "projects/levidev"
+        },
+        {
+            "id": "enterTable",
+            "type": "promptString",
+            "description": "Table Name (e.g., sp_widget, sys_script_include):"
+        },
+        {
+            "id": "enterQuery",
+            "type": "promptString",
+            "description": "Encoded Query (e.g., nameSTARTSWITHMyWidget):",
+            "default": ""
+        },
+        {
+            "id": "enterFolderName",
+            "type": "promptString",
+            "description": "Record Folder Name (e.g., My_Cool_Widget):"
+        },
+        {
+            "id": "newProjectName",
+            "type": "promptString",
+            "description": "Project Name (folder):"
+        },
+        {
+            "id": "newInstanceUrl",
+            "type": "promptString",
+            "description": "ServiceNow Instance URL:"
+        },
+        {
+            "id": "newClientId",
+            "type": "promptString",
+            "description": "Client ID (For Browser Auth):",
+            "default": ""
+        },
+        {
+            "id": "newClientSecret",
+            "type": "promptString",
+            "description": "Client Secret (For Browser Auth):",
+            "default": ""
+        },
+        {
+            "id": "newUser",
+            "type": "promptString",
+            "description": "User (Optional/Basic Auth):",
+            "default": ""
+        },
+        {
+            "id": "newPassword",
+            "type": "promptString",
+            "description": "Password (Optional/Basic Auth):",
+            "default": ""
+        }
+    ]
+}
