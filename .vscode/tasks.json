@@ -6,7 +6,7 @@
             "type": "shell",
             "command": "node",
             "args": [
-                "${workspaceFolder}/_tool/sn-sync.js",
+                "${workspaceFolder}/snsync",
                 "--open",
                 "${file}",
                 "--project",
@@ -27,7 +27,7 @@
             "type": "shell",
             "command": "node",
             "args": [
-                "${workspaceFolder}/_tool/sn-sync.js",
+                "${workspaceFolder}/snsync",
                 "--push",
                 "${file}",
                 "--project",
@@ -48,7 +48,7 @@
             "type": "shell",
             "command": "node",
             "args": [
-                "${workspaceFolder}/_tool/sn-sync.js",
+                "${workspaceFolder}/snsync",
                 "--pull",
                 "--project",
                 "${input:pickProject}"
@@ -61,7 +61,7 @@
             "type": "shell",
             "command": "node",
             "args": [
-                "${workspaceFolder}/_tool/sn-sync.js",
+                "${workspaceFolder}/snsync",
                 "--pull",
                 "--target",
                 "${file}",
@@ -83,7 +83,7 @@
             "type": "shell",
             "command": "node",
             "args": [
-                "${workspaceFolder}/_tool/sn-sync.js",
+                "${workspaceFolder}/snsync",
                 "--pull",
                 "--project",
                 "${input:pickProject}",
@@ -100,7 +100,7 @@
             "type": "shell",
             "command": "node",
             "args": [
-                "${workspaceFolder}/_tool/sn-sync.js",
+                "${workspaceFolder}/snsync",
                 "--push",
                 "--project",
                 "${input:pickProject}",
@@ -117,7 +117,7 @@
             "type": "shell",
             "command": "node",
             "args": [
-                "${workspaceFolder}/_tool/sn-sync.js",
+                "${workspaceFolder}/snsync",
                 "--watch",
                 "--project",
                 "${input:pickProject}"
