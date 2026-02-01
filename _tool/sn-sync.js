@@ -654,6 +654,93 @@ async function captureTableSchema(table, activeFilter) {
     }
 }
 
+async function createRecordInServiceNow(folderPath, table) {
+    console.log(`✨ Creating NEW record in [${table}] from folder: ${path.basename(folderPath)}...`);
+
+    // 1. Prepare Payload
+    const payload = {};
+    const config = CONFIG.mapping[table];
+
+    // Defaults from JSON metadata
+    const jsonFiles = ['_properties.json', '_record.json', 'meta.json'];
+    for (const jf of jsonFiles) {
+        const jsonPath = path.join(folderPath, jf);
+        if (fs.existsSync(jsonPath)) {
+            try {
+                const data = fs.readJsonSync(jsonPath);
+                // Flatten: If value/display_value struct, take value.
+                for (const [k, v] of Object.entries(data)) {
+                     if (v && typeof v === 'object' && 'value' in v) {
+                         payload[k] = v.value;
+                     } else {
+                         payload[k] = v;
+                     }
+                }
+            } catch (e) {
+                console.warn(`   ⚠️ Invalid JSON metadata: ${e.message}`);
+            }
+        }
+    }
+
+    // File Content Overrides
+    if (config && config.fields) {
+        config.fields.forEach(field => {
+            const ext = config.ext[field];
+            const fname = `${field}.${ext}`;
+            const fpath = path.join(folderPath, fname);
+            if (fs.existsSync(fpath)) {
+                payload[field] = fs.readFileSync(fpath, 'utf8');
+            }
+        });
+    }
+
+    // Extra JSON fields support
+    const jsonExportFields = config.jsonExport || config.jsonFields || [];
+    if (jsonExportFields.length > 0) {
+         // Some fields might be in _record.json already, which we loaded above.
+         // But if they are just keys there, we already got them.
+    }
+
+    if (Object.keys(payload).length === 0) {
+        console.error('   ❌ No data found to create record. (Check json files or field files)');
+        return;
+    }
+
+    // 2. POST (Create)
+    try {
+        const res = await snClient.post(`/api/now/table/${table}`, payload);
+        const result = res.data.result;
+        
+        if (result && result.sys_id) {
+            console.log(`   ✅ Record created! SysID: ${result.sys_id}`);
+            
+            // 3. Save Identity
+            fs.outputFileSync(path.join(folderPath, '.sys_id'), result.sys_id);
+            if (result.sys_updated_on) {
+                fs.outputFileSync(path.join(folderPath, '.sys_updated_on'), result.sys_updated_on);
+            }
+            
+            // 4. Update JSON with real values (Name, SysID, etc)
+            // We re-save the JSON with the server response to keep it in sync
+            const jsonName = table === 'sys_properties' ? '_properties.json' : '_record.json';
+            const jsonPath = path.join(folderPath, jsonName);
+            
+            let finalJson = {};
+            if (fs.existsSync(jsonPath)) finalJson = fs.readJsonSync(jsonPath);
+            
+            // Update fields that came back from server
+            finalJson.sys_id = { value: result.sys_id, display_value: result.sys_id };
+            if (result.name) finalJson.name = { value: result.name, display_value: result.name };
+            
+            fs.writeJsonSync(jsonPath, finalJson, { spaces: 4 });
+            console.log(`      💾 Updated local metadata with new SysID.`);
+        }
+    } catch (e) {
+         console.error(`   🔥 Creation Failed:`, e.response?.data?.error?.message || e.message);
+         if (e.response && e.response.data) console.error(JSON.stringify(e.response.data, null, 2));
+    }
+}
+
 async function pushToServiceNow(filePath) {
     const fileName = path.basename(filePath);
     
@@ -778,38 +865,104 @@ async function handleOpen(target) {
 
 async function handleManualPush(target, table, name) {
     console.log('🚀 Starting Manual Push...');
+    
+    // Normalize target
+    let targetPath = target && target !== 'true' ? target : null;
+    
+    // Case Legacy: --table X --name Y (Folder Push)
+    if (!targetPath && table && name) {
+        targetPath = path.join(CONFIG.localFolder, table, name);
+    }
 
-    // Case 1: Push specific file (--push src/table/rec/file.js)
-    if (target && target !== 'true' && fs.existsSync(target) && fs.lstatSync(target).isFile()) {
-        console.log(`   📄 Single file detected: ${target}`);
-        await pushToServiceNow(target);
+    if (!targetPath) {
+        console.error('❌ Insufficient parameters. Usage: --push src/table/folder');
+        return;
+    }
+    
+    if (!fs.existsSync(targetPath)) {
+        console.error(`❌ Path not found: ${targetPath}`);
         return;
     }
 
-    // Case 2: Push entire Record (--table X --name Y)
-    if (table && name) {
-        // Try to find folder. Name must be folder name (safeName)
-        const recordDir = path.join(CONFIG.localFolder, table, name);
+    const stats = fs.lstatSync(targetPath);
+
+    // Case 1: Single File
+    if (stats.isFile()) {
+        console.log(`   📄 Single file detected: ${path.basename(targetPath)}`);
+        // If file is inside a "New Record" folder (no .sys_id), this calls pushToServiceNow which fails/skips? 
+        // We probably assume user knows what they are doing. 
+        // But if they push a single file in a new record, maybe they want to create the record?
+        // Let's check context.
+        const dirPath = path.dirname(targetPath);
+        const sysIdPath = path.join(dirPath, '.sys_id');
+        if (!fs.existsSync(sysIdPath)) {
+            // It is a file in a NEW record folder.
+            // Delegate to Creating the whole record because partial POST is bad.
+            const parentName = path.basename(path.dirname(dirPath));
+            if (CONFIG.mapping[parentName]) {
+                 console.log(`   🆕 New Record detected from single file. Creating full record...`);
+                 await createRecordInServiceNow(dirPath, parentName);
+                 return;
+            }
+        }
+        await pushToServiceNow(targetPath);
+        return;
+    }
+
+    // Case 2: Directory
+    if (stats.isDirectory()) {
+        const dirName = path.basename(targetPath);
+        const parentName = path.basename(path.dirname(targetPath));
         
-        if (!fs.existsSync(recordDir)) {
-             console.error(`❌ Record folder not found: ${recordDir}`);
-             console.error(`   Hint: Use exact folder name (e.g., 'My_Widget').`);
+        // Scenario A: It is a Record Folder (Parent is a mapped table OR user specified table)
+        // Check if parent matches a table
+        let tableName = CONFIG.mapping[parentName] ? parentName : null;
+        
+        // If exact table param was passed, trust it
+        if (!tableName && table) tableName = table;
+
+        // If we found a valid table context
+        if (tableName) { 
+             const sysIdPath = path.join(targetPath, '.sys_id');
+             
+             if (fs.existsSync(sysIdPath)) {
+                 // Push All Files (Update)
+                 console.log(`   📂 Updating record: ${dirName}`);
+                 const files = fs.readdirSync(targetPath);
+                 for (const file of files) {
+                    if (file.startsWith('.')) continue; 
+                    const fp = path.join(targetPath, file);
+                    if (fs.lstatSync(fp).isFile()) await pushToServiceNow(fp);
+                 }
+             } else {
+                 // Create New
+                 await createRecordInServiceNow(targetPath, tableName);
+             }
              return;
         }
 
-        console.log(`   📂 Sending all files from: ${table}/${name}`);
-        const files = fs.readdirSync(recordDir);
-        
-        for (const file of files) {
-            // Ignore .sys_id and subfolders
-            if (file === '.sys_id' || file.startsWith('.')) continue;
-            
-            const fullPath = path.join(recordDir, file);
-            if (fs.lstatSync(fullPath).isFile()) {
-                await pushToServiceNow(fullPath);
-            }
+        // Scenario B: It is a Table Folder (The folder itself IS the table)
+        // e.g. src/sys_script
+        if (CONFIG.mapping[dirName]) {
+             console.log(`   📦 Bulk Mode: Scanning table [${dirName}]...`);
+             const children = fs.readdirSync(targetPath);
+             for (const child of children) {
+                 const childPath = path.join(targetPath, child);
+                 if (fs.lstatSync(childPath).isDirectory()) {
+                     // Check if it's new
+                     const childSysId = path.join(childPath, '.sys_id');
+                     if (!fs.existsSync(childSysId)) {
+                        await createRecordInServiceNow(childPath, dirName);
+                     } else {
+                        // Optional: Could update existing too, but 'Bulk Create' is safer default for broad push
+                        // console.log(`      Skipping existing: ${child}`); 
+                     }
+                 }
+             }
+             return;
         }
-        return;
+        
+        console.error(`❌ Folder '${dirName}' is neither a configured table nor a record inside one.`);
     }
     
     console.error('❌ Insufficient parameters.');
