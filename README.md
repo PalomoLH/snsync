@@ -12,6 +12,8 @@ Agile local development CLI and VS Code integration for the ServiceNow platform.
 - **VS Code Tasks**: Ready-to-use buttons for `Pull`, `Push`, `Watch`, and `Create Project`.
 - **Collision Protection**: Checks if the file was modified on the server before uploading.
 - **Context Aware**: Each record gets its own folder with separate scripts (`server.js`, `client.js`, `template.html`).
+- **🤖 AI-Ready**: Generates `_ai_context.md` with tags and `_record.json` with metadata to help AI agents understand your ServiceNow instance.
+- **Creation & Bulk Push**: Create new records by just making a folder and pushing it.
 
 ---
 
@@ -40,6 +42,28 @@ To run `snsync` from anywhere, add to your `~/.zshrc`:
 alias snsync='node /Users/palomo/workspace/sn/_tool/sn-sync.js'
 ```
 Then reload: `source ~/.zshrc`. Adjust the path if your repo lives elsewhere.
+
+---
+
+## 🚀 Usage Guide
+
+### ⬇️ Pulling Data (Download)
+- **Full Project**: Downloads all tables defined in `sn-config.json`.
+- **Custom Query**: Search for specific records interactively.
+    - *Tip*: Enable "AI Context" when asked to tag records with keywords (e.g., `Finance`, `Auth`).
+
+### ⬆️ Pushing Data (Upload & Create)
+- **Edit & Sync**: Just save the file (`.js`, `.html`) and run the "Push" task (or use Watch mode).
+- **Create New Record**: 
+    1. Create a folder inside the table folder (e.g., `src/sys_script_include/MyNewScript`).
+    2. Add your `script.js`.
+    3. Run `snsync --push projects/myproject/src/sys_script_include/MyNewScript`.
+    4. The script creates the record, gets the `sys_id`, and saves it locally.
+- **Bulk Create**: Run push on the *Table* folder to create all new subfolders at once.
+
+### 🧠 AI Features
+- **Context Tags**: Every record can have `_ai_context.md`. Search for "Context: MyTag" to find all related files.
+- **Metadata**: `_record.json` contains the full record payload (display values, types) for the AI to analyze.
 
 ---
 
