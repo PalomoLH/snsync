@@ -315,8 +315,20 @@ async function pullFromServiceNow(options = {}) {
         // 1. FILE Download (Now light and fast)
         // We always limit fields to save bandwidth, since context is saved separately
         // Added sys_updated_on for conflict check
-        // sysparm_display_value=false ENSURES raw UTC, ignoring user timezone
-        const fieldsParam = `&sysparm_fields=sys_id,name,sys_updated_on,${config.fields.join(',')}&sysparm_display_value=false`;
+        
+        // --- FEATURE: JSON Metadata & AI Context Support ---
+        // Support 'jsonExport' (from user config) or 'jsonFields'
+        const jsonExportFields = config.jsonExport || config.jsonFields || [];
+        const hasJsonFields = jsonExportFields.length > 0;
+        const displayValueMode = hasJsonFields ? 'all' : 'false';
+        
+        let fetchFields = ['sys_id', 'sys_updated_on', 'name', 'u_name', 'short_description', ...config.fields];
+        if (hasJsonFields) fetchFields.push(...jsonExportFields);
+        if (config.contextKeys) fetchFields.push(...config.contextKeys); // Future proofing
+
+        fetchFields = [...new Set(fetchFields)]; // Unique
+
+        const fieldsParam = `&sysparm_fields=${fetchFields.join(',')}&sysparm_display_value=${displayValueMode}`;
         const queryParam = activeFilter ? `&sysparm_query=${encodeURIComponent(activeFilter)}` : '';
         
         try {
@@ -329,8 +341,28 @@ async function pullFromServiceNow(options = {}) {
                 continue;
             }
 
+            // --- INTERACTIVE: Ask for AI Context (Custom Pull Only) ---
+            let contextTags = [];
+            if (options.query && process.stdout.isTTY) {
+                console.log(`\n   🤖 Custom Pull detected for ${records.length} records.`);
+                const wantContext = await askQuestion('      Do you want to add/update AI Context tags for these records? (y/N): ');
+                if (wantContext.toLowerCase().startsWith('y')) {
+                    const tagInput = await askQuestion('      Enter context tag(s) (comma separated, e.g. "Hackathon,Auth"): ');
+                    contextTags = tagInput.split(',').map(t => t.trim()).filter(t => t);
+                }
+            }
+
+            // Helper to get raw value regardless of display_value mode
+            const getVal = (r, f) => {
+                const val = r[f];
+                if (val && typeof val === 'object' && 'value' in val) return val.value;
+                return val;
+            };
+
             for (const rec of records) {
-                let safeName = (rec.name || rec.u_name || rec.short_description || 'Record').replace(/[^a-z0-9_-]/gi, '_');
+                const sysId = getVal(rec, 'sys_id');
+                const nameKey = getVal(rec, 'name') || getVal(rec, 'u_name') || getVal(rec, 'short_description') || 'Record';
+                let safeName = nameKey.replace(/[^a-z0-9_-]/gi, '_');
                 
                 // --- NEW FOLDER LOGIC PER RECORD ---
                 // Check name conflict
@@ -340,9 +372,9 @@ async function pullFromServiceNow(options = {}) {
                 // If folder exists but is from ANOTHER sys_id, we need to rename current one to avoid conflict
                 if (fs.existsSync(recordDir) && fs.existsSync(sysIdFile)) {
                    const existingSysId = fs.readFileSync(sysIdFile, 'utf8').trim();
-                   if (existingSysId !== rec.sys_id) {
+                   if (existingSysId !== sysId) {
                        // Name conflict! Add sys_id chunk to folder name
-                       safeName = `${safeName}_${rec.sys_id.substring(0,5)}`;
+                       safeName = `${safeName}_${sysId.substring(0,5)}`;
                        recordDir = path.join(CONFIG.localFolder, table, safeName);
                    }
                 }
@@ -351,22 +383,67 @@ async function pullFromServiceNow(options = {}) {
                 fs.ensureDirSync(recordDir);
                 
                 // Save hidden .sys_id so Push knows who this record is
-                fs.outputFileSync(path.join(recordDir, '.sys_id'), rec.sys_id);
+                fs.outputFileSync(path.join(recordDir, '.sys_id'), sysId);
                 
                 // Save hidden .sys_updated_on for Overwrite Protection
-                if (rec.sys_updated_on) {
-                    fs.outputFileSync(path.join(recordDir, '.sys_updated_on'), rec.sys_updated_on);
+                const updatedOn = getVal(rec, 'sys_updated_on');
+                if (updatedOn) {
+                    fs.outputFileSync(path.join(recordDir, '.sys_updated_on'), updatedOn);
                 }
 
                 // Save field files (e.g., script.js, template.html)
                 config.fields.forEach(field => {
-                    if (rec[field]) {
+                    const val = getVal(rec, field);
+                    if (val) {
                         const extension = config.ext[field];
                         const fileName = `${field}.${extension}`; // Clean name: script.js
                         const filePath = path.join(recordDir, fileName);
-                        fs.outputFileSync(filePath, rec[field]);
+                        fs.outputFileSync(filePath, val);
                     }
                 });
+
+                // --- FEATURE: Extra JSON Metadata ---
+                if (hasJsonFields) {
+                    const jsonContent = {};
+                    jsonExportFields.forEach(f => {
+                         // If mode is 'all', rec[f] is usually { value, display_value }
+                         // We want to save exactly that structure as per user request
+                         jsonContent[f] = rec[f]; 
+                    });
+                    // Also include name/type if available
+                    if (rec['name']) jsonContent['name'] = rec['name'];
+                    if (rec['sys_name']) jsonContent['sys_name'] = rec['sys_name'];
+                    
+                    // User requested "_properties.json", but we should be generic.
+                    // If it's sys_properties, use _properties.json, else _record.json
+                    const jsonName = table === 'sys_properties' ? '_properties.json' : '_record.json';
+                    fs.writeJsonSync(path.join(recordDir, jsonName), jsonContent, { spaces: 4 });
+                }
+
+                // --- FEATURE: AI Context File ---
+                if (contextTags.length > 0) {
+                    const contextFile = path.join(recordDir, '_ai_context.md');
+                    let currentContent = '';
+                    if (fs.existsSync(contextFile)) {
+                        currentContent = fs.readFileSync(contextFile, 'utf8');
+                    } else {
+                        currentContent = `# AI Context: ${nameKey}\n\n> **Auto-generated context**\n\n`;
+                    }
+
+                    // Append new tags if not present
+                    const lines = currentContent.split('\n');
+                    let tagsToAdd = [...contextTags];
+                    
+                    // Simple check if tag exists in file
+                    tagsToAdd = tagsToAdd.filter(tag => !currentContent.includes(tag));
+
+                    if (tagsToAdd.length > 0) {
+                         const newTagsBlock = tagsToAdd.map(t => `- **Context**: ${t}`).join('\n');
+                         currentContent += `\n${newTagsBlock}\n`;
+                         fs.writeFileSync(contextFile, currentContent);
+                         console.log(`      🧠 Added context tags to ${safeName}`);
+                    }
+                }
             }
             console.log(`   ✅ ${table}: ${records.length} records downloaded/updated.`);
             
