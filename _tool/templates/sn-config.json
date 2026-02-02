@@ -2,105 +2,362 @@
     "mapping": {
         "sys_script_include": {
             "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
-            "fields": ["script"],
-            "ext": { "script": "js" },
+            "fields": [
+                "script"
+            ],
+            "ext": {
+                "script": "js"
+            },
             "saveContext": true
         },
         "sys_script_client": {
             "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
-            "fields": ["script"],
-            "ext": { "script": "js" },
+            "fields": [
+                "script"
+            ],
+            "ext": {
+                "script": "js"
+            },
             "saveContext": true
         },
         "sys_script": {
             "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
-            "fields": ["script"],
-            "ext": { "script": "js" },
+            "fields": [
+                "script"
+            ],
+            "ext": {
+                "script": "js"
+            },
             "saveContext": true
         },
         "sys_ui_script": {
             "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
-            "fields": ["script"],
-            "ext": { "script": "js" },
+            "fields": [
+                "script"
+            ],
+            "ext": {
+                "script": "js"
+            },
             "saveContext": true
         },
         "sys_ui_action": {
             "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
-            "fields": ["script", "client_script_v2"],
-            "ext": { "script": "server.js", "client_script_v2": "client.js" },
+            "fields": [
+                "script",
+                "client_script_v2"
+            ],
+            "ext": {
+                "script": "server.js",
+                "client_script_v2": "client.js"
+            },
             "saveContext": true
         },
         "sysauto_script": {
             "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
-            "fields": ["script"],
-            "ext": { "script": "js" },
+            "fields": [
+                "script"
+            ],
+            "ext": {
+                "script": "js"
+            },
             "saveContext": true
         },
         "sysevent_script_action": {
             "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
-            "fields": ["script"],
-            "ext": { "script": "js" },
+            "fields": [
+                "script"
+            ],
+            "ext": {
+                "script": "js"
+            },
             "saveContext": true
         },
         "sp_widget": {
             "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
-            "fields": ["template", "script", "client_script", "css", "link", "demo_data"],
-            "ext": { "template": "html", "script": "server.js", "client_script": "client.js", "css": "scss", "link": "link.js", "demo_data": "json" },
+            "fields": [
+                "template",
+                "script",
+                "client_script",
+                "css",
+                "link",
+                "demo_data"
+            ],
+            "ext": {
+                "template": "html",
+                "script": "server.js",
+                "client_script": "client.js",
+                "css": "scss",
+                "link": "link.js",
+                "demo_data": "json"
+            },
             "saveContext": true
         },
         "sp_angular_provider": {
             "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
-            "fields": ["script", "template"],
-            "ext": { "script": "js", "template": "html" },
+            "fields": [
+                "script",
+                "template"
+            ],
+            "ext": {
+                "script": "js",
+                "template": "html"
+            },
             "saveContext": true
         },
         "sp_css": {
             "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
-            "fields": ["css"],
-            "ext": { "css": "css" },
+            "fields": [
+                "css"
+            ],
+            "ext": {
+                "css": "css"
+            },
             "saveContext": true
         },
         "sp_theme": {
             "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
-            "fields": ["css_variables"],
-            "ext": { "css_variables": "scss" },
+            "fields": [
+                "css_variables"
+            ],
+            "ext": {
+                "css_variables": "scss"
+            },
             "saveContext": true
         },
         "sp_page": {
             "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
-            "fields": ["css", "internal_content_css"],
-            "ext": { "css": "scss", "internal_content_css": "css" },
+            "fields": [
+                "css",
+                "internal_content_css",
+                "internal",
+                "title",
+                "short_description"
+            ],
+            "ext": {
+                "css": "scss",
+                "internal_content_css": "css",
+                "internal": "txt",
+                "title": "txt",
+                "short_description": "txt"
+            },
+            "saveContext": true
+        },
+        "sp_container": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "jsonExport": [
+                "name",
+                "order",
+                "sp_page",
+                "width",
+                "class_name",
+                "container_class_name",
+                "background_color",
+                "background_image"
+            ],
+            "saveContext": true
+        },
+        "sp_row": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "jsonExport": [
+                "sp_container",
+                "sp_column",
+                "class_name",
+                "order"
+            ],
+            "saveContext": true
+        },
+        "sp_column": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "jsonExport": [
+                "sp_row",
+                "size_xs",
+                "size_sm",
+                "size", 
+                "size_lg",
+                "class_name",
+                "order"
+            ],
+            "saveContext": true
+        },
+        "sp_instance": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "jsonExport": [
+                "title",
+                "id",
+                "class_name",
+                "order", 
+                "sp_column",
+                "active",
+                "size",
+                "css",
+                "url",
+                "widget_parameters",
+                "sp_widget"
+            ],
             "saveContext": true
         },
         "sys_ui_macro": {
             "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
-            "fields": ["xml"],
-            "ext": { "xml": "xml" },
+            "fields": [
+                "xml"
+            ],
+            "ext": {
+                "xml": "xml"
+            },
             "saveContext": true
         },
         "sys_ui_page": {
             "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
-            "fields": ["html", "client_script", "processing_script"],
-            "ext": { "html": "html", "client_script": "client.js", "processing_script": "server.js" },
+            "fields": [
+                "html",
+                "client_script",
+                "processing_script"
+            ],
+            "ext": {
+                "html": "html",
+                "client_script": "client.js",
+                "processing_script": "server.js"
+            },
             "saveContext": true
         },
         "sys_ui_policy": {
             "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
-            "fields": ["script_true", "script_false"],
-            "ext": { "script_true": "true.js", "script_false": "false.js" },
+            "fields": [
+                "script_true",
+                "script_false"
+            ],
+            "ext": {
+                "script_true": "true.js",
+                "script_false": "false.js"
+            },
             "saveContext": true
         },
         "sys_ws_operation": {
             "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
-            "fields": ["operation_script"],
-            "ext": { "operation_script": "js" },
+            "fields": [
+                "operation_script"
+            ],
+            "ext": {
+                "operation_script": "js"
+            },
             "saveContext": true
         },
         "sys_script_email": {
             "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
-            "fields": ["script"],
-            "ext": { "script": "js" },
+            "fields": [
+                "script"
+            ],
+            "ext": {
+                "script": "js"
+            },
             "saveContext": true
+        },
+        "sp_portal": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": [
+                "css_variables"
+            ],
+            "ext": {
+                "css": "scss"
+            },
+            "saveContext": true
+        },
+        "sys_rest_message_fn": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": [
+                "rest_message",
+                "rest_endpoint",
+                "function_name",
+                "http_method",
+                "content"
+            ],
+            "ext": {
+                "rest_message": "txt",
+                "rest_endpoint": "txt",
+                "function_name": "txt",
+                "http_method": "txt",
+                "content": "txt"
+            },
+            "jsonExport": [
+                "function_name",
+                "http_method",
+                "rest_endpoint",
+                "content",
+                "qualified_name"
+            ],
+            "saveContext": true
+        },
+        "sys_properties": {
+            "fields": [
+                "value"
+            ],
+            "ext": {
+                "value": "txt"
+            },
+            "jsonExport": [
+                "name",
+                "type",
+                "description",
+                "value",
+                "choices"
+            ],
+            "saveContext": true
+        },
+        "sys_rest_message": {
+            "onlyContext": true,
+            "filter": "sys_idISNOTEMPTY"
+        },
+        "sp_documentation": {
+            "onlyContext": true,
+            "filter": "sys_idISNOTEMPTY"
+        },
+        "sp_header_footer": {
+            "onlyContext": true,
+            "filter": "sys_idISNOTEMPTY"
+        },
+        "sys_security_acl": {
+            "onlyContext": true,
+            "filter": "sys_idISNOTEMPTY"
+        },
+        "sys_ws_definition": {
+            "onlyContext": true,
+            "filter": "sys_idISNOTEMPTY"
+        },
+        "sys_ws_version": {
+            "onlyContext": true,
+            "filter": "sys_idISNOTEMPTY"
+        },
+        "sys_auth_profile_basic": {
+            "onlyContext": true,
+            "filter": "sys_idISNOTEMPTY"
+        },
+        "oauth_entity_profile": {
+            "onlyContext": true,
+            "filter": "sys_idISNOTEMPTY"
+        },
+        "sys_protocol_profile": {
+            "onlyContext": true,
+            "filter": "sys_idISNOTEMPTY"
+        },
+        "ecc_agent": {
+            "onlyContext": true,
+            "filter": "sys_idISNOTEMPTY"
+        },
+        "sys_user_group": {
+            "onlyContext": true,
+            "filter": "sys_idISNOTEMPTY"
+        },
+        "sys_user": {
+            "onlyContext": true,
+            "filter": "sys_idISNOTEMPTY"
+        },
+        "change_request": {
+            "onlyContext": true,
+            "filter": "sys_idISNOTEMPTY"
+        },
+        "cmn_location": {
+            "onlyContext": true,
+            "filter": "sys_idISNOTEMPTY"
         }
     }
 }
