@@ -322,7 +322,7 @@ async function pullFromServiceNow(options = {}) {
         const hasJsonFields = jsonExportFields.length > 0;
         const displayValueMode = hasJsonFields ? 'all' : 'false';
         
-        let fetchFields = ['sys_id', 'sys_updated_on', 'name', 'u_name', 'short_description', ...config.fields];
+        let fetchFields = ['sys_id', 'sys_updated_on', 'name', 'u_name', 'short_description', ...(config.fields || [])];
         if (hasJsonFields) fetchFields.push(...jsonExportFields);
         if (config.contextKeys) fetchFields.push(...config.contextKeys); // Future proofing
 
@@ -392,15 +392,17 @@ async function pullFromServiceNow(options = {}) {
                 }
 
                 // Save field files (e.g., script.js, template.html)
-                config.fields.forEach(field => {
-                    const val = getVal(rec, field);
-                    if (val) {
-                        const extension = config.ext[field];
-                        const fileName = `${field}.${extension}`; // Clean name: script.js
-                        const filePath = path.join(recordDir, fileName);
-                        fs.outputFileSync(filePath, val);
-                    }
-                });
+                if (config.fields) {
+                    config.fields.forEach(field => {
+                        const val = getVal(rec, field);
+                        if (val) {
+                            const extension = config.ext ? config.ext[field] : 'txt';
+                            const fileName = `${field}.${extension}`; // Clean name: script.js
+                            const filePath = path.join(recordDir, fileName);
+                            fs.outputFileSync(filePath, val);
+                        }
+                    });
+                }
 
                 // --- FEATURE: Extra JSON Metadata ---
                 if (hasJsonFields) {
@@ -655,34 +657,19 @@ async function captureTableSchema(table, activeFilter) {
 }
 
 async function createRecordInServiceNow(folderPath, table) {
-    console.log(`✨ Creating NEW record in [${table}] from folder: ${path.basename(folderPath)}...`);
+    const recordName = path.basename(folderPath);
+    const tableDir = path.join(CONFIG.localFolder, table);
+    const expectedParent = path.resolve(tableDir);
+    const actualParent = path.resolve(path.dirname(folderPath));
+    if (actualParent !== expectedParent) {
+        console.error(`   ❌ Invalid path: folder must be inside ${table}/ (got ${folderPath})`);
+        return;
+    }
+    console.log(`✨ Creating NEW record in [${table}] from folder: ${recordName}...`);
 
-    // 1. Prepare Payload
     const payload = {};
     const config = CONFIG.mapping[table];
 
-    // Defaults from JSON metadata
-    const jsonFiles = ['_properties.json', '_record.json', 'meta.json'];
-    for (const jf of jsonFiles) {
-        const jsonPath = path.join(folderPath, jf);
-        if (fs.existsSync(jsonPath)) {
-            try {
-                const data = fs.readJsonSync(jsonPath);
-                // Flatten: If value/display_value struct, take value.
-                for (const [k, v] of Object.entries(data)) {
-                     if (v && typeof v === 'object' && 'value' in v) {
-                         payload[k] = v.value;
-                     } else {
-                         payload[k] = v;
-                     }
-                }
-            } catch (e) {
-                console.warn(`   ⚠️ Invalid JSON metadata: ${e.message}`);
-            }
-        }
-    }
-
-    // File Content Overrides
     if (config && config.fields) {
         config.fields.forEach(field => {
             const ext = config.ext[field];
@@ -694,12 +681,27 @@ async function createRecordInServiceNow(folderPath, table) {
         });
     }
 
-    // Extra JSON fields support
-    const jsonExportFields = config.jsonExport || config.jsonFields || [];
-    if (jsonExportFields.length > 0) {
-         // Some fields might be in _record.json already, which we loaded above.
-         // But if they are just keys there, we already got them.
+    const jsonFiles = ['_properties.json', '_record.json', 'meta.json'];
+    for (const jf of jsonFiles) {
+        const jsonPath = path.join(folderPath, jf);
+        if (fs.existsSync(jsonPath)) {
+            try {
+                const data = fs.readJsonSync(jsonPath);
+                for (const [k, v] of Object.entries(data)) {
+                    if (payload[k] != null) continue;
+                    if (v && typeof v === 'object' && 'value' in v) {
+                        payload[k] = v.value;
+                    } else {
+                        payload[k] = v;
+                    }
+                }
+            } catch (e) {
+                console.warn(`   ⚠️ Invalid JSON metadata: ${e.message}`);
+            }
+        }
     }
+
+    payload.name = recordName;
 
     if (Object.keys(payload).length === 0) {
         console.error('   ❌ No data found to create record. (Check json files or field files)');
@@ -714,26 +716,30 @@ async function createRecordInServiceNow(folderPath, table) {
         if (result && result.sys_id) {
             console.log(`   ✅ Record created! SysID: ${result.sys_id}`);
             
-            // 3. Save Identity
             fs.outputFileSync(path.join(folderPath, '.sys_id'), result.sys_id);
             if (result.sys_updated_on) {
                 fs.outputFileSync(path.join(folderPath, '.sys_updated_on'), result.sys_updated_on);
             }
             
-            // 4. Update JSON with real values (Name, SysID, etc)
-            // We re-save the JSON with the server response to keep it in sync
             const jsonName = table === 'sys_properties' ? '_properties.json' : '_record.json';
             const jsonPath = path.join(folderPath, jsonName);
             
             let finalJson = {};
             if (fs.existsSync(jsonPath)) finalJson = fs.readJsonSync(jsonPath);
             
-            // Update fields that came back from server
             finalJson.sys_id = { value: result.sys_id, display_value: result.sys_id };
-            if (result.name) finalJson.name = { value: result.name, display_value: result.name };
+            const displayName = result.name || result.api_name || recordName;
+            if (displayName) finalJson.name = { value: displayName, display_value: displayName };
             
             fs.writeJsonSync(jsonPath, finalJson, { spaces: 4 });
-            console.log(`      💾 Updated local metadata with new SysID.`);
+            
+            if (config && config.saveContext) {
+                const contextPath = path.join(folderPath, '_ai_context.md');
+                if (!fs.existsSync(contextPath)) {
+                    const contextContent = `# AI Context: ${displayName}\n\n> **Auto-generated context**\n\n`;
+                    fs.writeFileSync(contextPath, contextContent);
+                }
+            }
         }
     } catch (e) {
          console.error(`   🔥 Creation Failed:`, e.response?.data?.error?.message || e.message);
@@ -863,19 +869,44 @@ async function handleOpen(target) {
     }
 }
 
+async function pushAllNewFromAllTables() {
+    console.log('🚀 Pushing all new records from all tables...');
+    const tables = Object.entries(CONFIG.mapping).filter(([, c]) => c.fields && !c.onlyContext);
+    for (const [tableName, config] of tables) {
+        const tableDir = path.join(CONFIG.localFolder, tableName);
+        if (!fs.existsSync(tableDir) || !fs.lstatSync(tableDir).isDirectory()) continue;
+        const children = fs.readdirSync(tableDir);
+        for (const child of children) {
+            const childPath = path.join(tableDir, child);
+            if (!fs.lstatSync(childPath).isDirectory()) continue;
+            if (child.startsWith('.') || child === '.ai_context') continue;
+            const sysIdPath = path.join(childPath, '.sys_id');
+            if (!fs.existsSync(sysIdPath)) {
+                await createRecordInServiceNow(childPath, tableName);
+            }
+        }
+    }
+}
+
 async function handleManualPush(target, table, name) {
     console.log('🚀 Starting Manual Push...');
     
     // Normalize target
     let targetPath = target && target !== 'true' ? target : null;
     
-    // Case Legacy: --table X --name Y (Folder Push)
     if (!targetPath && table && name) {
         targetPath = path.join(CONFIG.localFolder, table, name);
     }
+    if (!targetPath && table && !name) {
+        targetPath = path.join(CONFIG.localFolder, table);
+    }
+    if (!targetPath && args.includes('--all')) {
+        await pushAllNewFromAllTables();
+        return;
+    }
 
     if (!targetPath) {
-        console.error('❌ Insufficient parameters. Usage: --push src/table/folder');
+        console.error('❌ Insufficient parameters. Usage: --push src/table/folder | --push --table X --name Y | --push --table X (all new) | --push --all');
         return;
     }
     
@@ -975,7 +1006,8 @@ async function handleManualPush(target, table, name) {
 // Simple arg parser
 function getArgValue(flag) {
     const idx = args.indexOf(flag);
-    return (idx !== -1 && args[idx + 1]) ? args[idx + 1] : null;
+    const next = idx !== -1 && args[idx + 1] ? args[idx + 1] : null;
+    return next && !next.startsWith('--') ? next : null;
 }
 
 if (args.includes('--pull')) {
@@ -1025,16 +1057,24 @@ else if (args.includes('--open')) {
 }
 else if (args.includes('--watch')) {
     console.log(`👀 Monitoring: ${CONFIG.localFolder}`);
-    console.log(`   (Edit files and save to send to ServiceNow)`);
+    console.log(`   (Edit files and save to push to ServiceNow; new records created on save)`);
     
     const watcher = chokidar.watch(CONFIG.localFolder, { persistent: true, ignoreInitial: true });
     
     watcher.on('change', (filePath) => {
-        // Simple debounce or extension check
         const ext = path.extname(filePath);
-        if (['.js', '.html', '.css', '.xml'].includes(ext) && !filePath.includes('.ai_context')) {
-            pushToServiceNow(filePath);
+        if (!['.js', '.html', '.css', '.xml', '.scss', '.json', '.txt'].includes(ext) || filePath.includes('.ai_context')) return;
+        const dirPath = path.dirname(filePath);
+        const sysIdPath = path.join(dirPath, '.sys_id');
+        if (!fs.existsSync(sysIdPath)) {
+            const tableDir = path.dirname(dirPath);
+            const tableName = path.basename(tableDir);
+            if (CONFIG.mapping[tableName] && CONFIG.mapping[tableName].fields) {
+                createRecordInServiceNow(dirPath, tableName);
+                return;
+            }
         }
+        pushToServiceNow(filePath);
     });
 } else {
     console.log('Commands: node sn-sync.js --pull | node sn-sync.js --watch');

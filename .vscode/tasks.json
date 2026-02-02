@@ -90,7 +90,10 @@
                 "--table",
                 "${input:enterTable}",
                 "--query",
-                "${input:enterQuery}"
+                {
+                    "value": "${input:enterQuery}",
+                    "quoting": "strong"
+                }
             ],
             "problemMatcher": [],
             "group": "build"
@@ -109,6 +112,49 @@
                 "--name",
                 "${input:enterFolderName}"
             ],
+            "problemMatcher": [],
+            "group": "build"
+        },
+        {
+            "label": "SN: Push All New Records (All Tables) 🆕📦",
+            "type": "shell",
+            "command": "node",
+            "args": [
+                "${workspaceFolder}/snsync",
+                "--push",
+                "--all",
+                "--project",
+                "${input:pickProject}"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": [],
+            "group": "build"
+        },
+        {
+            "label": "SN: Push All New Records (Table) 🆕📦",
+            "type": "shell",
+            "command": "node",
+            "args": [
+                "${workspaceFolder}/snsync",
+                "--push",
+                "--project",
+                "${input:pickProject}",
+                "--table",
+                "${input:enterTable}"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
             "problemMatcher": [],
             "group": "build"
         },
