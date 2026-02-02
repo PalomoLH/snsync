@@ -53,9 +53,7 @@
                 "--project",
                 "${input:pickProject}",
                 "--context-action",
-                "${input:contextMode}",
-                "--context-list",
-                "${input:contextSelectList}"
+                "${input:contextMode}"
             ],
             "problemMatcher": [],
             "group": "build"
@@ -72,9 +70,7 @@
                 "--project",
                 "${fileDirname}",
                 "--context-action",
-                "${input:contextMode}",
-                "--context-list",
-                "${input:contextSelectList}"
+                "${input:contextMode}"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
@@ -97,8 +93,6 @@
                 "${input:pickProject}",
                 "--context-action",
                 "${input:contextMode}",
-                "--context-list",
-                "${input:contextSelectList}",
                 "--table",
                 "${input:enterTable}",
                 "--query",
@@ -219,16 +213,9 @@
             "options": [
                 "prompt",
                 "auto",
-                "skip",
-                "select"
+                "skip"
             ],
             "default": "prompt"
-        },
-        {
-            "id": "contextSelectList",
-            "type": "promptString",
-            "description": "Comma-separated tables to add when mode is 'select' (optional):",
-            "default": ""
         },
         {
             "id": "enterTable",
