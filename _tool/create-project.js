@@ -1,6 +1,54 @@
 const fs = require('fs-extra');
 const path = require('path');
 
+function syncVSCodeProjectPicker(repoRoot, projectsDir, projectName) {
+    const tasksPath = path.join(repoRoot, '.vscode', 'tasks.json');
+    if (!fs.existsSync(tasksPath)) {
+        console.warn('   ⚠️ VS Code tasks.json not found; skipping picker update.');
+        return;
+    }
+
+    try {
+        const tasksConfig = fs.readJsonSync(tasksPath);
+        if (!Array.isArray(tasksConfig.inputs)) {
+            console.warn('   ⚠️ VS Code tasks.json missing "inputs" section.');
+            return;
+        }
+
+        const picker = tasksConfig.inputs.find(input => input.id === 'pickProject');
+        if (!picker) {
+            console.warn('   ⚠️ VS Code project picker input not found.');
+            return;
+        }
+
+        const directories = fs.readdirSync(projectsDir)
+            .filter(entry => {
+                if (entry.startsWith('.')) return false;
+                const fullPath = path.join(projectsDir, entry);
+                try {
+                    return fs.statSync(fullPath).isDirectory();
+                } catch (err) {
+                    return false;
+                }
+            })
+            .map(entry => path.posix.join('projects', entry));
+
+        const newEntry = path.posix.join('projects', projectName);
+        if (!directories.includes(newEntry)) directories.push(newEntry);
+        directories.sort((a, b) => a.localeCompare(b));
+
+        picker.options = directories;
+        if (directories.length > 0) {
+            picker.default = directories.includes(picker.default) ? picker.default : directories[0];
+        }
+
+        fs.writeJsonSync(tasksPath, tasksConfig, { spaces: 4 });
+        console.log('   ✅ VS Code project picker updated.');
+    } catch (err) {
+        console.warn(`   ⚠️ Could not update VS Code project picker: ${err.message}`);
+    }
+}
+
 // Helper to parse arguments --flag value
 const args = process.argv.slice(2);
 function getArg(flag) {
@@ -68,6 +116,8 @@ try {
 
     fs.writeFileSync(path.join(targetDir, '.env'), envContent);
     console.log('   ✅ .env file generated.');
+
+    syncVSCodeProjectPicker(rootDir, projectsDir, name);
 
     console.log(`\n🎉 Project '${name}' created successfully!`);
     console.log(`   📂 Location: ${targetDir}`);

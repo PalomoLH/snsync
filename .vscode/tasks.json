@@ -51,7 +51,11 @@
                 "${workspaceFolder}/snsync",
                 "--pull",
                 "--project",
-                "${input:pickProject}"
+                "${input:pickProject}",
+                "--context-action",
+                "${input:contextMode}",
+                "--context-list",
+                "${input:contextSelectList}"
             ],
             "problemMatcher": [],
             "group": "build"
@@ -66,7 +70,11 @@
                 "--target",
                 "${file}",
                 "--project",
-                "${fileDirname}"
+                "${fileDirname}",
+                "--context-action",
+                "${input:contextMode}",
+                "--context-list",
+                "${input:contextSelectList}"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
@@ -87,6 +95,10 @@
                 "--pull",
                 "--project",
                 "${input:pickProject}",
+                "--context-action",
+                "${input:contextMode}",
+                "--context-list",
+                "${input:contextSelectList}",
                 "--table",
                 "${input:enterTable}",
                 "--query",
@@ -196,13 +208,27 @@
     "inputs": [
         {
             "id": "pickProject",
+            "type": "promptString",
+            "description": "Relative project folder (e.g., projects/my-project):",
+            "default": "projects/<project-folder>"
+        },
+        {
+            "id": "contextMode",
             "type": "pickString",
-            "description": "Select Project to Sync:",
+            "description": "Missing reference context handling mode:",
             "options": [
-
-                "projects/levidev"
+                "prompt",
+                "auto",
+                "skip",
+                "select"
             ],
-            "default": "projects/levidev"
+            "default": "prompt"
+        },
+        {
+            "id": "contextSelectList",
+            "type": "promptString",
+            "description": "Comma-separated tables to add when mode is 'select' (optional):",
+            "default": ""
         },
         {
             "id": "enterTable",
