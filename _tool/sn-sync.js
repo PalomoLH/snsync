@@ -276,6 +276,11 @@ function loadMappingConfig() {
 async function pullFromServiceNow(options = {}) {
     console.log('⬇️  Starting Smart Download...');
     
+    const contextOptions = {
+        mode: (options.contextAction || 'prompt'),
+        selection: options.contextList || ''
+    };
+    
     let targets = Object.entries(CONFIG.mapping);
 
     // Filter by specific table (--table)
@@ -298,11 +303,11 @@ async function pullFromServiceNow(options = {}) {
         
         // 0. NEW LOGIC: Save Context (Schema) ONLY ONCE
         if (config.saveContext || config.onlyContext) {
-            const missingRefs = await captureTableSchema(table, activeFilter);
+            const missingRefs = await captureTableSchema(table, activeFilter, contextOptions);
             
             // Context Interactive Suggestion (Auto-Import)
-            if (missingRefs && missingRefs.length > 0 && process.stdout.isTTY) {
-                await processMissingRefs(missingRefs);
+            if (missingRefs && missingRefs.length > 0) {
+                await processMissingRefs(missingRefs, contextOptions);
             }
         }
 
@@ -469,58 +474,79 @@ function askQuestion(query) {
     }));
 }
 
-async function processMissingRefs(missingRefs) {
+async function processMissingRefs(missingRefs, contextOptions = {}) {
+    if (!missingRefs || missingRefs.length === 0) return;
+
     console.log(`\n      🤔 Found ${missingRefs.length} referenced tables without context:`);
     missingRefs.forEach(ref => console.log(`         - ${ref}`));
-    
-    // Check if we are interactive
-    if (!process.stdout.isTTY) {
+
+    const mode = (contextOptions.mode || 'prompt').toLowerCase();
+    const selectionRaw = contextOptions.selection || '';
+    let toAdd = [];
+
+    if (mode === 'skip' || mode === 'no' || mode === 'n') {
+        return;
+    } else if (mode === 'auto' || mode === 'all' || mode === 'yes' || mode === 'y') {
+        toAdd = missingRefs;
+    } else if (mode === 'select') {
+        const selected = selectionRaw.split(',').map(s => s.trim()).filter(Boolean);
+        toAdd = selected.filter(s => missingRefs.includes(s));
+        if (toAdd.length === 0) {
+            console.warn('      ⚠️ No valid tables provided via --context-list.');
+            return;
+        }
+    } else if (mode === 'prompt') {
+        if (!process.stdout.isTTY) return;
+
+        const ans = await askQuestion('      ❓ Add their context to sn-config.json? (y/n/select): ');
+        const normalized = ans.trim().toLowerCase();
+
+        if (normalized === 'y' || normalized === 's') {
+            toAdd = missingRefs;
+        } else if (normalized === 'select') {
+            const selected = await askQuestion('      ✍️  Enter tables separated by comma (e.g., sys_user, cmn_location): ');
+            toAdd = selected.split(',').map(s => s.trim()).filter(s => missingRefs.includes(s));
+        } else {
+            return;
+        }
+    } else {
+        console.warn(`      ⚠️ Unknown context mode '${mode}'. Skipping context update.`);
         return;
     }
 
-    const ans = await askQuestion('      ❓ Add their context to sn-config.json? (y/n/select): ');
+    if (toAdd.length === 0) return;
+
+    console.log(`      ⚙️  Adding [${toAdd.join(', ')}] to sn-config.json...`);
     
-    let toAdd = [];
-    if (ans.toLowerCase() === 's' || ans.toLowerCase() === 'y') {
-        toAdd = missingRefs;
-    } else if (ans.toLowerCase() === 'select') {
-        const selected = await askQuestion('      ✍️  Enter tables separated by comma (e.g., sys_user, cmn_location): ');
-        toAdd = selected.split(',').map(s => s.trim()).filter(s => missingRefs.includes(s));
+    // Load, Edit and Save JSON
+    const configPath = path.join(CURRENT_DIR, 'sn-config.json');
+    const currentConfig = fs.readJsonSync(configPath);
+    
+    // Ensure structure
+    if (!currentConfig.mapping) currentConfig.mapping = {};
+
+    for (const newTable of toAdd) {
+        if (!currentConfig.mapping[newTable]) {
+            currentConfig.mapping[newTable] = {
+                onlyContext: true,
+                filter: "sys_idISNOTEMPTY" // Safe default filter
+            };
+            // Update local memory for this run too
+            CONFIG.mapping[newTable] = currentConfig.mapping[newTable];
+        }
     }
-
-    if (toAdd.length > 0) {
-        console.log(`      ⚙️  Adding [${toAdd.join(', ')}] to sn-config.json...`);
-        
-        // Load, Edit and Save JSON
-        const configPath = path.join(CURRENT_DIR, 'sn-config.json');
-        const currentConfig = fs.readJsonSync(configPath);
-        
-        // Ensure structure
-        if (!currentConfig.mapping) currentConfig.mapping = {};
-
-        for (const newTable of toAdd) {
-            if (!currentConfig.mapping[newTable]) {
-                currentConfig.mapping[newTable] = {
-                    onlyContext: true,
-                    filter: "sys_idISNOTEMPTY" // Safe default filter
-                };
-                // Update local memory for this run too
-                CONFIG.mapping[newTable] = currentConfig.mapping[newTable];
-            }
-        }
-        
-        fs.writeJsonSync(configPath, currentConfig, { spaces: 4 });
-        console.log(`      ✅ Configuration updated! Downloading contexts now...`);
-        
-        // Download context immediately for new tables
-        for (const newTable of toAdd) {
-            await captureTableSchema(newTable, "sys_idISNOTEMPTY");
-        }
+    
+    fs.writeJsonSync(configPath, currentConfig, { spaces: 4 });
+    console.log(`      ✅ Configuration updated! Downloading contexts now...`);
+    
+    // Download context immediately for new tables
+    for (const newTable of toAdd) {
+        await captureTableSchema(newTable, "sys_idISNOTEMPTY", contextOptions);
     }
 }
 
 // --- INTEGRATION: ADVANCED SCHEMA CAPTURE ---
-async function captureTableSchema(table, activeFilter) {
+async function captureTableSchema(table, activeFilter, contextOptions = {}) {
     let missingRefs = []; 
     try {
         console.log(`      🧠 Generating Smart Context (Schema + Choices + Refs) for ${table}...`);
@@ -747,6 +773,19 @@ async function createRecordInServiceNow(folderPath, table) {
     }
 }
 
+function resolveFieldByConfig(table, fileName) {
+    const tableConfig = CONFIG.mapping[table];
+    if (!tableConfig || !tableConfig.ext) return null;
+    for (const [fieldName, extension] of Object.entries(tableConfig.ext)) {
+        if (!extension) continue;
+        const expectedName = `${fieldName}.${extension}`;
+        if (expectedName === fileName) {
+            return { field: fieldName, extension };
+        }
+    }
+    return null;
+}
+
 async function pushToServiceNow(filePath) {
     const fileName = path.basename(filePath);
     
@@ -765,11 +804,16 @@ async function pushToServiceNow(filePath) {
     if (fs.existsSync(sysIdPath)) {
         sysId = fs.readFileSync(sysIdPath, 'utf8').trim();
         table = path.basename(parentDir); // Assume: src/table/Record/file.js
-        
-        // Filename is "field.ext" (e.g., script.js, template.html)
-        const parts = fileName.split('.');
-        extension = parts.pop();
-        field = parts.join('.'); // Supports fields with dots? Generally no, but ok.
+
+        const resolved = resolveFieldByConfig(table, fileName);
+        if (resolved) {
+            ({ field, extension } = resolved);
+        } else {
+            // Filename is "field.ext" (e.g., script.js, template.html)
+            const parts = fileName.split('.');
+            extension = parts.pop();
+            field = parts.join('.');
+        }
     } 
     // --- LEGACY MODE (COMPATIBILITY FOR OLD FILES REMAINING IN ROOT) ---
     else {
@@ -1013,7 +1057,9 @@ function getArgValue(flag) {
 if (args.includes('--pull')) {
     let options = {
         table: getArgValue('--table'),
-        query: getArgValue('--query')
+        query: getArgValue('--query'),
+        contextAction: getArgValue('--context-action'),
+        contextList: getArgValue('--context-list')
     };
 
     // Support --target for Surgical Pull (Update current record)
