@@ -256,12 +256,47 @@
             "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
             "fields": [
                 "script",
-                "execution_plan"
+                "execution_plan",
+                "description"
             ],
             "ext": {
                 "script": "js",
-                "execution_plan": "js"
+                "execution_plan": "js",
+                "description": "html"
             },
+            "jsonExport": [
+                "short_description",
+                "category",
+                "workflow",
+                "location",
+                "price",
+                "cost",
+                "recurring_price",
+                "recurring_frequency",
+                "delivery_plan",
+                "availability",
+                "custom_cart",
+                "group",
+                "roles",
+                "catalogs",
+                "template",
+                "billable",
+                "no_cart",
+                "no_order",
+                "no_proceed_checkout",
+                "no_quantity",
+                "no_search",
+                "no_wishlist_cart",
+                "omit_price",
+                "preview",
+                "order",
+                "request_method",
+                "active",
+                "sc_catalogs",
+                "visible_bundle",
+                "visible_guide",
+                "visible_standalone"
+            ],
             "saveContext": true
         },
         "sc_cat_item_producer": {
@@ -294,6 +329,29 @@
                 "macro": "xml",
                 "default_html_value": "html"
             },
+            "jsonExport": [
+                "question_text",
+                "type",
+                "mandatory",
+                "order",
+                "default_value",
+                "reference",
+                "lookup_table",
+                "lookup_value",
+                "lookup_label",
+                "active",
+                "variable_set",
+                "tooltip",
+                "help_text",
+                "cat_item",
+                "use_reference_qualifier",
+                "reference_qual",
+                "read_only",
+                "max_length",
+                "visible_standalone",
+                "visible_bundle",
+                "visible_summary"
+            ],
             "saveContext": true
         },
         "wf_workflow": {

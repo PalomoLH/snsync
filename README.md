@@ -65,6 +65,73 @@ Then reload: `source ~/.zshrc`. Adjust the path if your repo lives elsewhere.
 - **Context Tags**: Every record can have `_ai_context.md`. Search for "Context: MyTag" to find all related files.
 - **Metadata**: `_record.json` contains the full record payload (display values, types) for the AI to analyze.
 
+### 📦 Working with Catalog Items
+
+Use the `--catalog-item` flag to pull everything related to a single catalog item: settings, form variables, and client scripts. Files are automatically organized in one folder instead of scattered across multiple table folders.
+
+#### 🚀 How to Use
+
+**1. Pull a complete catalog item:**
+```bash
+node snsync --pull --catalog-item <catalog_item_sys_id> --project projects/your-project
+```
+
+**Example:**
+```bash
+node snsync --pull --catalog-item a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6 --project projects/myproject
+```
+
+**What gets pulled:**
+- ✅ **Catalog item** (settings, description, execution plan)
+- ✅ **All form variables** (questions with editable parameters)
+- ✅ **All client scripts** (onChange, onSubmit validation)
+
+**2. The organized structure:**
+```
+src/
+└── Your_Catalog_Item_Name/
+    ├── catalog_item/
+    │   ├── _record.json        ← Edit: title, price, roles, workflow, visibility
+    │   ├── description.html    ← Edit: catalog description
+    │   └── script.js           ← Edit: execution plan (if any)
+    ├── variables/
+    │   ├── role/
+    │   │   └── _record.json    ← Edit: label, mandatory, order, tooltip, help_text
+    │   ├── team_name/
+    │   │   └── _record.json    ← Edit variable parameters
+    │   └── ...
+    └── client_scripts/
+        ├── On_Change_of_role/
+        │   └── script.js       ← Edit: validation logic
+        ├── popup_on_submit/
+        │   └── script.js       ← Edit: submission behavior
+        └── ...
+```
+
+**3. Edit files locally:**
+```json
+// Example: catalog_item/_record.json
+{
+    "short_description": { "value": "Request Software License" },
+    "price": { "value": "0" },
+    "active": { "value": "true" },
+    "roles": { "value": "itil,admin", "display_value": "ITIL, Admin" },
+    "no_cart": { "value": "true" }
+}
+```
+
+**4. Push changes back:**
+```bash
+node snsync --push --project projects/your-project
+```
+
+✨ **The tool automatically detects which files changed and only pushes those!**
+
+#### 💡 Pro Tips
+- **Finding the sys_id**: Open the catalog item in ServiceNow → Right-click header → Copy sys_id
+- **Bulk editing**: Use find/replace across all `_record.json` files to update multiple parameters at once
+- **No prompts**: Unlike custom queries, catalog item pulls run without interruptions (no AI context prompts)
+
 ---
 
 ## 📂 Folder Structure
@@ -141,7 +208,9 @@ Each project has its `sn-config.json` defining what to sync.
 - **ext**: File extension for each field.
 - **saveContext**: Saves a schema JSON to help AI/Copilot understand user configs.
 
-### 📋 Supported Tables
+---
+
+## 📋 Supported Tables
 
 The tool supports synchronization for the following ServiceNow tables:
 

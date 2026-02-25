@@ -273,6 +273,136 @@ function loadMappingConfig() {
 
 // --- FUNCTIONS ---
 
+async function pullCatalogItem(sysId, contextAction = 'skip') {
+    console.log('📦 Pulling complete catalog item...');
+    console.log(`   Catalog Item ID: ${sysId}`);
+    console.log('');
+    
+    const tables = [
+        { name: 'sc_cat_item', query: `sys_id=${sysId}`, label: '📋 Catalog Item' },
+        { name: 'item_option_new', query: `cat_item=${sysId}`, label: '📝 Form Variables' },
+        { name: 'catalog_script_client', query: `cat_item=${sysId}`, label: '⚡ Client Scripts' },
+    ];
+    
+    let catalogItemName = null;
+    
+    for (const table of tables) {
+        console.log(`${table.label} (${table.name})...`);
+        
+        const config = CONFIG.mapping[table.name];
+        if (!config) {
+            console.warn(`   ⚠️  Table ${table.name} not configured in sn-config.json`);
+            continue;
+        }
+        
+        await pullFromServiceNow({
+            table: table.name,
+            query: table.query,
+            contextAction: contextAction,
+            skipContextPrompt: true
+        });
+        
+        // Get catalog item name for folder reorganization
+        if (table.name === 'sc_cat_item' && !catalogItemName) {
+            const itemPath = path.join(CONFIG.localFolder, 'sc_cat_item');
+            if (fs.existsSync(itemPath)) {
+                const items = fs.readdirSync(itemPath).filter(f => {
+                    return fs.statSync(path.join(itemPath, f)).isDirectory() && !f.startsWith('.');
+                });
+                if (items.length > 0) {
+                    catalogItemName = items[0];
+                }
+            }
+        }
+    }
+    
+    if (!catalogItemName) {
+        console.error('❌ Could not find catalog item name for reorganization');
+        return;
+    }
+    
+    // Reorganize files
+    console.log('');
+    console.log('📦 Reorganizing files by catalog item...');
+    
+    try {
+        const srcPath = CONFIG.localFolder;
+        const masterFolder = path.join(srcPath, catalogItemName);
+        
+        // Create master folder structure
+        fs.ensureDirSync(path.join(masterFolder, 'catalog_item'));
+        fs.ensureDirSync(path.join(masterFolder, 'variables'));
+        fs.ensureDirSync(path.join(masterFolder, 'client_scripts'));
+        
+        // Move catalog item files
+        const oldCatalogPath = path.join(srcPath, 'sc_cat_item', catalogItemName);
+        if (fs.existsSync(oldCatalogPath)) {
+            const files = fs.readdirSync(oldCatalogPath);
+            files.forEach(file => {
+                const src = path.join(oldCatalogPath, file);
+                const dest = path.join(masterFolder, 'catalog_item', file);
+                fs.moveSync(src, dest, { overwrite: true });
+            });
+            fs.removeSync(oldCatalogPath);
+        }
+        
+        // Move variables
+        const variablesPath = path.join(srcPath, 'item_option_new');
+        if (fs.existsSync(variablesPath)) {
+            const variables = fs.readdirSync(variablesPath).filter(f => {
+                return fs.statSync(path.join(variablesPath, f)).isDirectory() && !f.startsWith('.');
+            });
+            
+            variables.forEach(varName => {
+                const src = path.join(variablesPath, varName);
+                const dest = path.join(masterFolder, 'variables', varName);
+                fs.moveSync(src, dest, { overwrite: true });
+            });
+            
+            if (fs.readdirSync(variablesPath).filter(f => !f.startsWith('.')).length === 0) {
+                fs.removeSync(variablesPath);
+            }
+        }
+        
+        // Move client scripts
+        const scriptsPath = path.join(srcPath, 'catalog_script_client');
+        if (fs.existsSync(scriptsPath)) {
+            const scripts = fs.readdirSync(scriptsPath).filter(f => {
+                return fs.statSync(path.join(scriptsPath, f)).isDirectory() && !f.startsWith('.');
+            });
+            
+            scripts.forEach(scriptName => {
+                const src = path.join(scriptsPath, scriptName);
+                const dest = path.join(masterFolder, 'client_scripts', scriptName);
+                fs.moveSync(src, dest, { overwrite: true });
+            });
+            
+            if (fs.readdirSync(scriptsPath).filter(f => !f.startsWith('.')).length === 0) {
+                fs.removeSync(scriptsPath);
+            }
+        }
+        
+        // Clean up empty sc_cat_item folder
+        const catalogItemPath = path.join(srcPath, 'sc_cat_item');
+        if (fs.existsSync(catalogItemPath) && fs.readdirSync(catalogItemPath).filter(f => !f.startsWith('.')).length === 0) {
+            fs.removeSync(catalogItemPath);
+        }
+        
+        console.log(`   ✅ Organized into: ${catalogItemName}/`);
+        console.log('');
+        console.log('📁 Structure:');
+        console.log(`   src/${catalogItemName}/`);
+        console.log(`   ├── catalog_item/       (item settings & description)`);
+        console.log(`   ├── variables/          (form fields)`);
+        console.log(`   └── client_scripts/     (form behavior)`);
+        console.log('');
+        console.log('💡 Edit files, then push: node snsync --push');
+        
+    } catch (error) {
+        console.warn('   ⚠️  Could not reorganize files:', error.message);
+    }
+}
+
 async function pullFromServiceNow(options = {}) {
     console.log('⬇️  Starting Smart Download...');
     
@@ -348,7 +478,7 @@ async function pullFromServiceNow(options = {}) {
 
             // --- INTERACTIVE: Ask for AI Context (Custom Pull Only) ---
             let contextTags = [];
-            if (options.query && process.stdout.isTTY) {
+            if (options.query && process.stdout.isTTY && !options.skipContextPrompt) {
                 console.log(`\n   🤖 Custom Pull detected for ${records.length} records.`);
                 const wantContext = await askQuestion('      Do you want to add/update AI Context tags for these records? (y/N): ');
                 if (wantContext.toLowerCase().startsWith('y')) {
@@ -1055,41 +1185,50 @@ function getArgValue(flag) {
 }
 
 if (args.includes('--pull')) {
-    let options = {
-        table: getArgValue('--table'),
-        query: getArgValue('--query'),
-        contextAction: getArgValue('--context-action'),
-        contextList: getArgValue('--context-list')
-    };
+    const catalogItemId = getArgValue('--catalog-item');
+    
+    if (catalogItemId) {
+        // Catalog Item Mode: Pull everything related to this CI
+        const contextAction = getArgValue('--context-action') || 'skip';
+        pullCatalogItem(catalogItemId, contextAction);
+    } else {
+        // Normal Pull Mode
+        let options = {
+            table: getArgValue('--table'),
+            query: getArgValue('--query'),
+            contextAction: getArgValue('--context-action'),
+            contextList: getArgValue('--context-list')
+        };
 
-    // Support --target for Surgical Pull (Update current record)
-    const target = getArgValue('--target');
-    if (target && fs.existsSync(target)) {
-        // Try to discover context (Table + SysId) based on file
-        let searchPath = target;
-        if (fs.lstatSync(searchPath).isFile()) searchPath = path.dirname(searchPath); // Get folder if it's a file
-        
-        const sysIdPath = path.join(searchPath, '.sys_id');
-        
-        // If not found in immediate folder, try one level up (if using src/table/record/extra_folder)
-        // But our structure is src/table/record, so searchPath should be the record.
-        
-        if (fs.existsSync(sysIdPath)) {
-            const sysId = fs.readFileSync(sysIdPath, 'utf8').trim();
-            // src/table/record -> Get table name (parent of record)
-            const tableDir = path.dirname(searchPath); 
-            const tableName = path.basename(tableDir);
+        // Support --target for Surgical Pull (Update current record)
+        const target = getArgValue('--target');
+        if (target && fs.existsSync(target)) {
+            // Try to discover context (Table + SysId) based on file
+            let searchPath = target;
+            if (fs.lstatSync(searchPath).isFile()) searchPath = path.dirname(searchPath); // Get folder if it's a file
             
-            console.log(`🎯 Surgical Pull detected: Table [${tableName}] ID [${sysId}]`);
-            options.table = tableName;
-            options.query = `sys_id=${sysId}`;
-        } else {
-             console.error('❌ Could not identify .sys_id for this file. Surgical pull impossible.');
-             process.exit(1);
+            const sysIdPath = path.join(searchPath, '.sys_id');
+            
+            // If not found in immediate folder, try one level up (if using src/table/record/extra_folder)
+            // But our structure is src/table/record, so searchPath should be the record.
+            
+            if (fs.existsSync(sysIdPath)) {
+                const sysId = fs.readFileSync(sysIdPath, 'utf8').trim();
+                // src/table/record -> Get table name (parent of record)
+                const tableDir = path.dirname(searchPath); 
+                const tableName = path.basename(tableDir);
+                
+                console.log(`🎯 Surgical Pull detected: Table [${tableName}] ID [${sysId}]`);
+                options.table = tableName;
+                options.query = `sys_id=${sysId}`;
+            } else {
+                 console.error('❌ Could not identify .sys_id for this file. Surgical pull impossible.');
+                 process.exit(1);
+            }
         }
-    }
 
-    pullFromServiceNow(options);
+        pullFromServiceNow(options);
+    }
 } 
 else if (args.includes('--push')) {
     const target = getArgValue('--push');
