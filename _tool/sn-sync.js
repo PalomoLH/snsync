@@ -812,12 +812,12 @@ async function captureTableSchema(table, activeFilter, contextOptions = {}) {
     }
 }
 
-async function createRecordInServiceNow(folderPath, table) {
+async function createRecordInServiceNow(folderPath, table, skipPathValidation = false) {
     const recordName = path.basename(folderPath);
     const tableDir = path.join(CONFIG.localFolder, table);
     const expectedParent = path.resolve(tableDir);
     const actualParent = path.resolve(path.dirname(folderPath));
-    if (actualParent !== expectedParent) {
+    if (!skipPathValidation && actualParent !== expectedParent) {
         console.error(`   ❌ Invalid path: folder must be inside ${table}/ (got ${folderPath})`);
         return;
     }
@@ -894,6 +894,29 @@ async function createRecordInServiceNow(folderPath, table) {
                 if (!fs.existsSync(contextPath)) {
                     const contextContent = `# AI Context: ${displayName}\n\n> **Auto-generated context**\n\n`;
                     fs.writeFileSync(contextPath, contextContent);
+                }
+            }
+            
+            // Handle choices for Multiple Choice variables (item_option_new)
+            if (table === 'item_option_new') {
+                const choicesPath = path.join(folderPath, 'choices.json');
+                if (fs.existsSync(choicesPath)) {
+                    try {
+                        const choices = fs.readJsonSync(choicesPath);
+                        console.log(`   📝 Creating ${choices.length} question choices...`);
+                        for (const choice of choices) {
+                            const choicePayload = {
+                                question: result.sys_id,
+                                text: choice.text,
+                                value: choice.value,
+                                order: choice.order || '100'
+                            };
+                            await snClient.post('/api/now/table/question_choice', choicePayload);
+                        }
+                        console.log(`   ✅ All choices created successfully!`);
+                    } catch (e) {
+                        console.warn(`   ⚠️ Failed to create choices: ${e.message}`);
+                    }
                 }
             }
         }
@@ -1118,6 +1141,114 @@ async function handleManualPush(target, table, name) {
     if (stats.isDirectory()) {
         const dirName = path.basename(targetPath);
         const parentName = path.basename(path.dirname(targetPath));
+        
+        // Scenario CATALOG: Detect Catalog Item folder structure
+        const catalogItemFolder = path.join(targetPath, 'catalog_item');
+        const variablesFolder = path.join(targetPath, 'variables');
+        const clientScriptsFolder = path.join(targetPath, 'client_scripts');
+        
+        if (fs.existsSync(catalogItemFolder) || fs.existsSync(variablesFolder) || fs.existsSync(clientScriptsFolder)) {
+            console.log(`   📦 Catalog Item structure detected: ${dirName}`);
+            
+            // Push catalog_item (sc_cat_item)
+            if (fs.existsSync(catalogItemFolder)) {
+                console.log(`   📝 Pushing catalog item...`);
+                const sysIdPath = path.join(catalogItemFolder, '.sys_id');
+                if (fs.existsSync(sysIdPath)) {
+                    const files = fs.readdirSync(catalogItemFolder);
+                    for (const file of files) {
+                        if (file.startsWith('.')) continue;
+                        const fp = path.join(catalogItemFolder, file);
+                        if (fs.lstatSync(fp).isFile()) await pushToServiceNow(fp);
+                    }
+                }
+            }
+            
+            // Push variables (item_option_new)
+            if (fs.existsSync(variablesFolder)) {
+                console.log(`   📋 Pushing variables...`);
+                const varDirs = fs.readdirSync(variablesFolder);
+                for (const varDir of varDirs) {
+                    const varPath = path.join(variablesFolder, varDir);
+                    if (!fs.lstatSync(varPath).isDirectory()) continue;
+                    
+                    const sysIdPath = path.join(varPath, '.sys_id');
+                    if (fs.existsSync(sysIdPath)) {
+                        // Update existing variable
+                        console.log(`      ↻ Updating variable: ${varDir}`);
+                        const files = fs.readdirSync(varPath);
+                        for (const file of files) {
+                            if (file.startsWith('.')) continue;
+                            const fp = path.join(varPath, file);
+                            if (fs.lstatSync(fp).isFile()) await pushToServiceNow(fp);
+                        }
+                        
+                        // Sync choices if choices.json exists
+                        const choicesPath = path.join(varPath, 'choices.json');
+                        if (fs.existsSync(choicesPath)) {
+                            try {
+                                const varSysId = fs.readFileSync(sysIdPath, 'utf8').trim();
+                                const choices = fs.readJsonSync(choicesPath);
+                                
+                                // Delete existing choices
+                                const existingRes = await snClient.get(`/api/now/table/question_choice?sysparm_query=question=${varSysId}`);
+                                const existing = existingRes.data.result || [];
+                                for (const ex of existing) {
+                                    await snClient.delete(`/api/now/table/question_choice/${ex.sys_id}`);
+                                }
+                                
+                                // Create new choices
+                                console.log(`         📝 Syncing ${choices.length} choices...`);
+                                for (const choice of choices) {
+                                    const choicePayload = {
+                                        question: varSysId,
+                                        text: choice.text,
+                                        value: choice.value,
+                                        order: choice.order || '100'
+                                    };
+                                    await snClient.post('/api/now/table/question_choice', choicePayload);
+                                }
+                            } catch (e) {
+                                console.warn(`         ⚠️ Failed to sync choices: ${e.message}`);
+                            }
+                        }
+                    } else {
+                        // Create new variable
+                        console.log(`      ✨ Creating new variable: ${varDir}`);
+                        await createRecordInServiceNow(varPath, 'item_option_new', true);
+                    }
+                }
+            }
+            
+            // Push client_scripts (catalog_script_client)
+            if (fs.existsSync(clientScriptsFolder)) {
+                console.log(`   📜 Pushing client scripts...`);
+                const scriptDirs = fs.readdirSync(clientScriptsFolder);
+                for (const scriptDir of scriptDirs) {
+                    const scriptPath = path.join(clientScriptsFolder, scriptDir);
+                    if (!fs.lstatSync(scriptPath).isDirectory()) continue;
+                    
+                    const sysIdPath = path.join(scriptPath, '.sys_id');
+                    if (fs.existsSync(sysIdPath)) {
+                        // Update existing script
+                        console.log(`      ↻ Updating script: ${scriptDir}`);
+                        const files = fs.readdirSync(scriptPath);
+                        for (const file of files) {
+                            if (file.startsWith('.')) continue;
+                            const fp = path.join(scriptPath, file);
+                            if (fs.lstatSync(fp).isFile()) await pushToServiceNow(fp);
+                        }
+                    } else {
+                        // Create new script
+                        console.log(`      ✨ Creating new script: ${scriptDir}`);
+                        await createRecordInServiceNow(scriptPath, 'catalog_script_client', true);
+                    }
+                }
+            }
+            
+            console.log('   ✅ Catalog item push complete!');
+            return;
+        }
         
         // Scenario A: It is a Record Folder (Parent is a mapped table OR user specified table)
         // Check if parent matches a table

@@ -350,7 +350,8 @@
                 "max_length",
                 "visible_standalone",
                 "visible_bundle",
-                "visible_summary"
+                "visible_summary",
+                "choices"
             ],
             "saveContext": true
         },
