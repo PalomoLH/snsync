@@ -252,6 +252,96 @@
             },
             "saveContext": true
         },
+        "sc_cat_item": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": [
+                "script",
+                "execution_plan"
+            ],
+            "ext": {
+                "script": "js",
+                "execution_plan": "js"
+            },
+            "saveContext": true
+        },
+        "sc_cat_item_producer": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": [
+                "script"
+            ],
+            "ext": {
+                "script": "js"
+            },
+            "saveContext": true
+        },
+        "catalog_script_client": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": [
+                "script"
+            ],
+            "ext": {
+                "script": "js"
+            },
+            "saveContext": true
+        },
+        "item_option_new": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": [
+                "macro",
+                "default_html_value"
+            ],
+            "ext": {
+                "macro": "xml",
+                "default_html_value": "html"
+            },
+            "saveContext": true
+        },
+        "wf_workflow": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": [
+                "description",
+                "condition"
+            ],
+            "ext": {
+                "description": "txt",
+                "condition": "js"
+            },
+            "saveContext": true
+        },
+        "wf_activity": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": [
+                "script",
+                "on_cancel",
+                "result_condition"
+            ],
+            "ext": {
+                "script": "js",
+                "on_cancel": "js",
+                "result_condition": "js"
+            },
+            "saveContext": true
+        },
+        "sys_hub_flow": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": [
+                "description"
+            ],
+            "ext": {
+                "description": "txt"
+            },
+            "saveContext": true
+        },
+        "sys_hub_action_type_definition": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": [
+                "script"
+            ],
+            "ext": {
+                "script": "js"
+            },
+            "saveContext": true
+        },
         "sp_portal": {
             "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
             "fields": [

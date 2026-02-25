@@ -141,6 +141,46 @@ Each project has its `sn-config.json` defining what to sync.
 - **ext**: File extension for each field.
 - **saveContext**: Saves a schema JSON to help AI/Copilot understand user configs.
 
+### 📋 Supported Tables
+
+The tool supports synchronization for the following ServiceNow tables:
+
+**Core Scripts:**
+- `sys_script_include` - Server-side Script Includes
+- `sys_script_client` - Client Scripts
+- `sys_script` - Business Rules
+- `sys_ui_script` - UI Scripts
+- `sys_ui_action` - UI Actions
+- `sysauto_script` - Scheduled Jobs
+- `sysevent_script_action` - Event Script Actions
+
+**Service Catalog:**
+- `sc_cat_item` - Catalog Items
+- `sc_cat_item_producer` - Record Producers
+- `catalog_script_client` - Catalog Client Scripts
+- `item_option_new` - Catalog Variables
+
+**Workflows:**
+- `wf_workflow` - Workflow Definitions
+- `wf_activity` - Workflow Activities  
+- `sys_hub_flow` - Flow Designer Flows
+- `sys_hub_action_type_definition` - Flow Designer Actions
+
+**Service Portal:**
+- `sp_widget` - Service Portal Widgets
+- `sp_angular_provider` - Angular Providers
+- `sp_page` - Service Portal Pages
+- `sp_css` - Portal CSS
+
+**UI Components:**
+- `sys_ui_macro` - UI Macros
+- `sys_ui_page` - UI Pages
+- `sys_ui_policy` - UI Policies
+
+**Integration:**
+- `sys_ws_operation` - Web Service Operations
+- `sys_rest_message_fn` - REST Message Functions
+
 ---
 
 ## 🔐 Authentication: Browser vs. Basic
