@@ -273,6 +273,136 @@ function loadMappingConfig() {
 
 // --- FUNCTIONS ---
 
+async function pullCatalogItem(sysId, contextAction = 'skip') {
+    console.log('📦 Pulling complete catalog item...');
+    console.log(`   Catalog Item ID: ${sysId}`);
+    console.log('');
+    
+    const tables = [
+        { name: 'sc_cat_item', query: `sys_id=${sysId}`, label: '📋 Catalog Item' },
+        { name: 'item_option_new', query: `cat_item=${sysId}`, label: '📝 Form Variables' },
+        { name: 'catalog_script_client', query: `cat_item=${sysId}`, label: '⚡ Client Scripts' },
+    ];
+    
+    let catalogItemName = null;
+    
+    for (const table of tables) {
+        console.log(`${table.label} (${table.name})...`);
+        
+        const config = CONFIG.mapping[table.name];
+        if (!config) {
+            console.warn(`   ⚠️  Table ${table.name} not configured in sn-config.json`);
+            continue;
+        }
+        
+        await pullFromServiceNow({
+            table: table.name,
+            query: table.query,
+            contextAction: contextAction,
+            skipContextPrompt: true
+        });
+        
+        // Get catalog item name for folder reorganization
+        if (table.name === 'sc_cat_item' && !catalogItemName) {
+            const itemPath = path.join(CONFIG.localFolder, 'sc_cat_item');
+            if (fs.existsSync(itemPath)) {
+                const items = fs.readdirSync(itemPath).filter(f => {
+                    return fs.statSync(path.join(itemPath, f)).isDirectory() && !f.startsWith('.');
+                });
+                if (items.length > 0) {
+                    catalogItemName = items[0];
+                }
+            }
+        }
+    }
+    
+    if (!catalogItemName) {
+        console.error('❌ Could not find catalog item name for reorganization');
+        return;
+    }
+    
+    // Reorganize files
+    console.log('');
+    console.log('📦 Reorganizing files by catalog item...');
+    
+    try {
+        const srcPath = CONFIG.localFolder;
+        const masterFolder = path.join(srcPath, catalogItemName);
+        
+        // Create master folder structure
+        fs.ensureDirSync(path.join(masterFolder, 'catalog_item'));
+        fs.ensureDirSync(path.join(masterFolder, 'variables'));
+        fs.ensureDirSync(path.join(masterFolder, 'client_scripts'));
+        
+        // Move catalog item files
+        const oldCatalogPath = path.join(srcPath, 'sc_cat_item', catalogItemName);
+        if (fs.existsSync(oldCatalogPath)) {
+            const files = fs.readdirSync(oldCatalogPath);
+            files.forEach(file => {
+                const src = path.join(oldCatalogPath, file);
+                const dest = path.join(masterFolder, 'catalog_item', file);
+                fs.moveSync(src, dest, { overwrite: true });
+            });
+            fs.removeSync(oldCatalogPath);
+        }
+        
+        // Move variables
+        const variablesPath = path.join(srcPath, 'item_option_new');
+        if (fs.existsSync(variablesPath)) {
+            const variables = fs.readdirSync(variablesPath).filter(f => {
+                return fs.statSync(path.join(variablesPath, f)).isDirectory() && !f.startsWith('.');
+            });
+            
+            variables.forEach(varName => {
+                const src = path.join(variablesPath, varName);
+                const dest = path.join(masterFolder, 'variables', varName);
+                fs.moveSync(src, dest, { overwrite: true });
+            });
+            
+            if (fs.readdirSync(variablesPath).filter(f => !f.startsWith('.')).length === 0) {
+                fs.removeSync(variablesPath);
+            }
+        }
+        
+        // Move client scripts
+        const scriptsPath = path.join(srcPath, 'catalog_script_client');
+        if (fs.existsSync(scriptsPath)) {
+            const scripts = fs.readdirSync(scriptsPath).filter(f => {
+                return fs.statSync(path.join(scriptsPath, f)).isDirectory() && !f.startsWith('.');
+            });
+            
+            scripts.forEach(scriptName => {
+                const src = path.join(scriptsPath, scriptName);
+                const dest = path.join(masterFolder, 'client_scripts', scriptName);
+                fs.moveSync(src, dest, { overwrite: true });
+            });
+            
+            if (fs.readdirSync(scriptsPath).filter(f => !f.startsWith('.')).length === 0) {
+                fs.removeSync(scriptsPath);
+            }
+        }
+        
+        // Clean up empty sc_cat_item folder
+        const catalogItemPath = path.join(srcPath, 'sc_cat_item');
+        if (fs.existsSync(catalogItemPath) && fs.readdirSync(catalogItemPath).filter(f => !f.startsWith('.')).length === 0) {
+            fs.removeSync(catalogItemPath);
+        }
+        
+        console.log(`   ✅ Organized into: ${catalogItemName}/`);
+        console.log('');
+        console.log('📁 Structure:');
+        console.log(`   src/${catalogItemName}/`);
+        console.log(`   ├── catalog_item/       (item settings & description)`);
+        console.log(`   ├── variables/          (form fields)`);
+        console.log(`   └── client_scripts/     (form behavior)`);
+        console.log('');
+        console.log('💡 Edit files, then push: node snsync --push');
+        
+    } catch (error) {
+        console.warn('   ⚠️  Could not reorganize files:', error.message);
+    }
+}
+
 async function pullFromServiceNow(options = {}) {
     console.log('⬇️  Starting Smart Download...');
     
@@ -348,7 +478,7 @@ async function pullFromServiceNow(options = {}) {
 
             // --- INTERACTIVE: Ask for AI Context (Custom Pull Only) ---
             let contextTags = [];
-            if (options.query && process.stdout.isTTY) {
+            if (options.query && process.stdout.isTTY && !options.skipContextPrompt) {
                 console.log(`\n   🤖 Custom Pull detected for ${records.length} records.`);
                 const wantContext = await askQuestion('      Do you want to add/update AI Context tags for these records? (y/N): ');
                 if (wantContext.toLowerCase().startsWith('y')) {
@@ -682,12 +812,12 @@ async function captureTableSchema(table, activeFilter, contextOptions = {}) {
     }
 }
 
-async function createRecordInServiceNow(folderPath, table) {
+async function createRecordInServiceNow(folderPath, table, skipPathValidation = false) {
     const recordName = path.basename(folderPath);
     const tableDir = path.join(CONFIG.localFolder, table);
     const expectedParent = path.resolve(tableDir);
     const actualParent = path.resolve(path.dirname(folderPath));
-    if (actualParent !== expectedParent) {
+    if (!skipPathValidation && actualParent !== expectedParent) {
         console.error(`   ❌ Invalid path: folder must be inside ${table}/ (got ${folderPath})`);
         return;
     }
@@ -764,6 +894,29 @@ async function createRecordInServiceNow(folderPath, table) {
                 if (!fs.existsSync(contextPath)) {
                     const contextContent = `# AI Context: ${displayName}\n\n> **Auto-generated context**\n\n`;
                     fs.writeFileSync(contextPath, contextContent);
+                }
+            }
+            
+            // Handle choices for Multiple Choice variables (item_option_new)
+            if (table === 'item_option_new') {
+                const choicesPath = path.join(folderPath, 'choices.json');
+                if (fs.existsSync(choicesPath)) {
+                    try {
+                        const choices = fs.readJsonSync(choicesPath);
+                        console.log(`   📝 Creating ${choices.length} question choices...`);
+                        for (const choice of choices) {
+                            const choicePayload = {
+                                question: result.sys_id,
+                                text: choice.text,
+                                value: choice.value,
+                                order: choice.order || '100'
+                            };
+                            await snClient.post('/api/now/table/question_choice', choicePayload);
+                        }
+                        console.log(`   ✅ All choices created successfully!`);
+                    } catch (e) {
+                        console.warn(`   ⚠️ Failed to create choices: ${e.message}`);
+                    }
                 }
             }
         }
@@ -989,6 +1142,114 @@ async function handleManualPush(target, table, name) {
         const dirName = path.basename(targetPath);
         const parentName = path.basename(path.dirname(targetPath));
         
+        // Scenario CATALOG: Detect Catalog Item folder structure
+        const catalogItemFolder = path.join(targetPath, 'catalog_item');
+        const variablesFolder = path.join(targetPath, 'variables');
+        const clientScriptsFolder = path.join(targetPath, 'client_scripts');
+        
+        if (fs.existsSync(catalogItemFolder) || fs.existsSync(variablesFolder) || fs.existsSync(clientScriptsFolder)) {
+            console.log(`   📦 Catalog Item structure detected: ${dirName}`);
+            
+            // Push catalog_item (sc_cat_item)
+            if (fs.existsSync(catalogItemFolder)) {
+                console.log(`   📝 Pushing catalog item...`);
+                const sysIdPath = path.join(catalogItemFolder, '.sys_id');
+                if (fs.existsSync(sysIdPath)) {
+                    const files = fs.readdirSync(catalogItemFolder);
+                    for (const file of files) {
+                        if (file.startsWith('.')) continue;
+                        const fp = path.join(catalogItemFolder, file);
+                        if (fs.lstatSync(fp).isFile()) await pushToServiceNow(fp);
+                    }
+                }
+            }
+            
+            // Push variables (item_option_new)
+            if (fs.existsSync(variablesFolder)) {
+                console.log(`   📋 Pushing variables...`);
+                const varDirs = fs.readdirSync(variablesFolder);
+                for (const varDir of varDirs) {
+                    const varPath = path.join(variablesFolder, varDir);
+                    if (!fs.lstatSync(varPath).isDirectory()) continue;
+                    
+                    const sysIdPath = path.join(varPath, '.sys_id');
+                    if (fs.existsSync(sysIdPath)) {
+                        // Update existing variable
+                        console.log(`      ↻ Updating variable: ${varDir}`);
+                        const files = fs.readdirSync(varPath);
+                        for (const file of files) {
+                            if (file.startsWith('.')) continue;
+                            const fp = path.join(varPath, file);
+                            if (fs.lstatSync(fp).isFile()) await pushToServiceNow(fp);
+                        }
+                        
+                        // Sync choices if choices.json exists
+                        const choicesPath = path.join(varPath, 'choices.json');
+                        if (fs.existsSync(choicesPath)) {
+                            try {
+                                const varSysId = fs.readFileSync(sysIdPath, 'utf8').trim();
+                                const choices = fs.readJsonSync(choicesPath);
+                                
+                                // Delete existing choices
+                                const existingRes = await snClient.get(`/api/now/table/question_choice?sysparm_query=question=${varSysId}`);
+                                const existing = existingRes.data.result || [];
+                                for (const ex of existing) {
+                                    await snClient.delete(`/api/now/table/question_choice/${ex.sys_id}`);
+                                }
+                                
+                                // Create new choices
+                                console.log(`         📝 Syncing ${choices.length} choices...`);
+                                for (const choice of choices) {
+                                    const choicePayload = {
+                                        question: varSysId,
+                                        text: choice.text,
+                                        value: choice.value,
+                                        order: choice.order || '100'
+                                    };
+                                    await snClient.post('/api/now/table/question_choice', choicePayload);
+                                }
+                            } catch (e) {
+                                console.warn(`         ⚠️ Failed to sync choices: ${e.message}`);
+                            }
+                        }
+                    } else {
+                        // Create new variable
+                        console.log(`      ✨ Creating new variable: ${varDir}`);
+                        await createRecordInServiceNow(varPath, 'item_option_new', true);
+                    }
+                }
+            }
+            
+            // Push client_scripts (catalog_script_client)
+            if (fs.existsSync(clientScriptsFolder)) {
+                console.log(`   📜 Pushing client scripts...`);
+                const scriptDirs = fs.readdirSync(clientScriptsFolder);
+                for (const scriptDir of scriptDirs) {
+                    const scriptPath = path.join(clientScriptsFolder, scriptDir);
+                    if (!fs.lstatSync(scriptPath).isDirectory()) continue;
+                    
+                    const sysIdPath = path.join(scriptPath, '.sys_id');
+                    if (fs.existsSync(sysIdPath)) {
+                        // Update existing script
+                        console.log(`      ↻ Updating script: ${scriptDir}`);
+                        const files = fs.readdirSync(scriptPath);
+                        for (const file of files) {
+                            if (file.startsWith('.')) continue;
+                            const fp = path.join(scriptPath, file);
+                            if (fs.lstatSync(fp).isFile()) await pushToServiceNow(fp);
+                        }
+                    } else {
+                        // Create new script
+                        console.log(`      ✨ Creating new script: ${scriptDir}`);
+                        await createRecordInServiceNow(scriptPath, 'catalog_script_client', true);
+                    }
+                }
+            }
+            
+            console.log('   ✅ Catalog item push complete!');
+            return;
+        }
+        
         // Scenario A: It is a Record Folder (Parent is a mapped table OR user specified table)
         // Check if parent matches a table
         let tableName = CONFIG.mapping[parentName] ? parentName : null;
@@ -1055,41 +1316,50 @@ function getArgValue(flag) {
 }
 
 if (args.includes('--pull')) {
-    let options = {
-        table: getArgValue('--table'),
-        query: getArgValue('--query'),
-        contextAction: getArgValue('--context-action'),
-        contextList: getArgValue('--context-list')
-    };
+    const catalogItemId = getArgValue('--catalog-item');
+    
+    if (catalogItemId) {
+        // Catalog Item Mode: Pull everything related to this CI
+        const contextAction = getArgValue('--context-action') || 'skip';
+        pullCatalogItem(catalogItemId, contextAction);
+    } else {
+        // Normal Pull Mode
+        let options = {
+            table: getArgValue('--table'),
+            query: getArgValue('--query'),
+            contextAction: getArgValue('--context-action'),
+            contextList: getArgValue('--context-list')
+        };
 
-    // Support --target for Surgical Pull (Update current record)
-    const target = getArgValue('--target');
-    if (target && fs.existsSync(target)) {
-        // Try to discover context (Table + SysId) based on file
-        let searchPath = target;
-        if (fs.lstatSync(searchPath).isFile()) searchPath = path.dirname(searchPath); // Get folder if it's a file
-        
-        const sysIdPath = path.join(searchPath, '.sys_id');
-        
-        // If not found in immediate folder, try one level up (if using src/table/record/extra_folder)
-        // But our structure is src/table/record, so searchPath should be the record.
-        
-        if (fs.existsSync(sysIdPath)) {
-            const sysId = fs.readFileSync(sysIdPath, 'utf8').trim();
-            // src/table/record -> Get table name (parent of record)
-            const tableDir = path.dirname(searchPath); 
-            const tableName = path.basename(tableDir);
+        // Support --target for Surgical Pull (Update current record)
+        const target = getArgValue('--target');
+        if (target && fs.existsSync(target)) {
+            // Try to discover context (Table + SysId) based on file
+            let searchPath = target;
+            if (fs.lstatSync(searchPath).isFile()) searchPath = path.dirname(searchPath); // Get folder if it's a file
             
-            console.log(`🎯 Surgical Pull detected: Table [${tableName}] ID [${sysId}]`);
-            options.table = tableName;
-            options.query = `sys_id=${sysId}`;
-        } else {
-             console.error('❌ Could not identify .sys_id for this file. Surgical pull impossible.');
-             process.exit(1);
+            const sysIdPath = path.join(searchPath, '.sys_id');
+            
+            // If not found in immediate folder, try one level up (if using src/table/record/extra_folder)
+            // But our structure is src/table/record, so searchPath should be the record.
+            
+            if (fs.existsSync(sysIdPath)) {
+                const sysId = fs.readFileSync(sysIdPath, 'utf8').trim();
+                // src/table/record -> Get table name (parent of record)
+                const tableDir = path.dirname(searchPath); 
+                const tableName = path.basename(tableDir);
+                
+                console.log(`🎯 Surgical Pull detected: Table [${tableName}] ID [${sysId}]`);
+                options.table = tableName;
+                options.query = `sys_id=${sysId}`;
+            } else {
+                 console.error('❌ Could not identify .sys_id for this file. Surgical pull impossible.');
+                 process.exit(1);
+            }
         }
-    }
 
-    pullFromServiceNow(options);
+        pullFromServiceNow(options);
+    }
 } 
 else if (args.includes('--push')) {
     const target = getArgValue('--push');
