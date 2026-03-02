@@ -10,24 +10,43 @@ import base64
 import re
 import zlib
 import subprocess
+import argparse
+import os
+import glob
 
-def get_token():
+def get_token(project=None):
     """Read OAuth token from cache"""
-    token_file = '../projects/levidev/.token_cache.json'
+    script_dir = os.path.dirname(__file__)
+    project_arg = project or os.getenv('SN_PROJECT_PATH')
+
+    token_file = None
+    if project_arg:
+        candidate = os.path.join(script_dir, '..', project_arg, '.token_cache.json')
+        if os.path.exists(candidate):
+            token_file = candidate
+
+    if not token_file:
+        candidates = sorted(glob.glob(os.path.join(script_dir, '..', 'projects', '*', '.token_cache.json')))
+        if candidates:
+            token_file = candidates[0]
+
+    if not token_file:
+        raise FileNotFoundError("Could not resolve .token_cache.json. Use --project or set SN_PROJECT_PATH.")
+
     with open(token_file, 'r') as f:
         data = json.load(f)
     return data['access_token']
 
-def verify_dvs_approval():
+def verify_dvs_approval(instance_url, update_xml_id, project=None):
     """Retrieve flow and check DVS approval condition"""
     print("Verifying DVS Approval Status...")
     print("=" * 60)
     
     # Get token
-    token = get_token()
+    token = get_token(project)
     
     # Retrieve flow XML
-    url = "https://levidev.service-now.com/api/now/table/sys_update_xml/66abc0dd87f932105668c88d0ebb359f"
+    url = f"{instance_url.rstrip('/')}/api/now/table/sys_update_xml/{update_xml_id}"
     params = "?sysparm_fields=payload,sys_updated_on,sys_updated_by"
     
     result = subprocess.run([
@@ -91,7 +110,13 @@ def verify_dvs_approval():
 
 if __name__ == '__main__':
     try:
-        success = verify_dvs_approval()
+        parser = argparse.ArgumentParser(description='Verify DVS approval modification in flow XML')
+        parser.add_argument('--instance', required=True, help='ServiceNow instance URL')
+        parser.add_argument('--update-xml-id', required=True, help='sys_update_xml record sys_id')
+        parser.add_argument('--project', help='Relative project folder (e.g., projects/my-project)')
+        args = parser.parse_args()
+
+        success = verify_dvs_approval(args.instance, args.update_xml_id, args.project)
         sys.exit(0 if success else 1)
     except Exception as e:
         print(f"❌ ERROR: {e}")

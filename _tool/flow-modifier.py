@@ -11,6 +11,7 @@ import re
 import sys
 import os
 import argparse
+import glob
 from typing import Dict, List, Any, Optional
 
 class FlowDesignerModifier:
@@ -178,6 +179,7 @@ def main():
     parser = argparse.ArgumentParser(description='ServiceNow Flow Designer Modifier')
     parser.add_argument('--instance', required=True, help='ServiceNow instance URL')
     parser.add_argument('--token', help='OAuth token (or will read from .token_cache.json)')
+    parser.add_argument('--project', help='Relative project folder (e.g., projects/my-project)')
     parser.add_argument('--flow-id', required=True, help='Flow sys_id')
     parser.add_argument('--action-id', required=True, help='Action sys_id to modify')
     parser.add_argument('--operation', choices=['skip-approval'], required=True, help='Operation to perform')
@@ -188,15 +190,28 @@ def main():
     # Get token
     token = args.token
     if not token:
-        # Try to read from token cache
-        token_cache_file = os.path.join(os.path.dirname(__file__), '../projects/levidev/.token_cache.json')
-        if os.path.exists(token_cache_file):
+        token_cache_file = None
+        script_dir = os.path.dirname(__file__)
+        project_arg = args.project or os.getenv('SN_PROJECT_PATH')
+
+        if project_arg:
+            candidate = os.path.join(script_dir, '..', project_arg, '.token_cache.json')
+            if os.path.exists(candidate):
+                token_cache_file = candidate
+
+        if not token_cache_file:
+            candidates = sorted(glob.glob(os.path.join(script_dir, '..', 'projects', '*', '.token_cache.json')))
+            if candidates:
+                token_cache_file = candidates[0]
+
+        if token_cache_file:
             with open(token_cache_file, 'r') as f:
                 token_data = json.load(f)
                 token = token_data.get('access_token')
     
     if not token:
-        print("ERROR: No token provided and could not read from .token_cache.json")
+        print("ERROR: No token provided and could not resolve .token_cache.json")
+        print("Provide --token or --project (e.g., projects/my-project), or set SN_PROJECT_PATH.")
         sys.exit(1)
     
     # Create modifier

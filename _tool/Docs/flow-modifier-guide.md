@@ -32,7 +32,7 @@ python3 flow-modifier.py \
 ```bash
 # Preview DVS approval modification
 python3 flow-modifier.py \
-  --instance "https://levidev.service-now.com" \
+  --instance "https://your-instance.service-now.com" \
   --flow-id "88a75b531b8952107fca32231b4bcb09" \
   --action-id "b397fbe08785f210f7a2a60d3fbb359a" \
   --operation skip-approval
@@ -229,7 +229,7 @@ cd /Users/fwiek/Documents/snsync/_tool
 
 # 1. Modify DVS approval to auto-skip
 python3 flow-modifier.py \
-  --instance "https://levidev.service-now.com" \
+  --instance "https://your-instance.service-now.com" \
   --flow-id "88a75b531b8952107fca32231b4bcb09" \
   --action-id "b397fbe08785f210f7a2a60d3fbb359a" \
   --operation skip-approval
@@ -239,7 +239,7 @@ cat /tmp/modified_flow_xml.json | jq '.payload' | head -50
 
 # 3. Push to ServiceNow
 python3 flow-pusher.py \
-  --instance "https://levidev.service-now.com" \
+  --instance "https://your-instance.service-now.com" \
   --apply
 
 # 4. Verify by testing catalog request

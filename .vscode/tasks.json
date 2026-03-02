@@ -207,9 +207,9 @@
             "id": "pickProject",
             "type": "promptString",
             "description": "Relative project folder (e.g., projects/my-project):",
-            "default": "projects/levidev",
+            "default": "projects/<project-folder>",
             "options": [
-                "projects/levidev"
+                "projects/<project-folder>"
             ]
         },
         {

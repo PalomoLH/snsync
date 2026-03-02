@@ -5,8 +5,12 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-INSTANCE="https://levidev.service-now.com"
-TOKEN_FILE="$SCRIPT_DIR/../projects/levidev/.token_cache.json"
+INSTANCE="${SN_INSTANCE:-https://your-instance.service-now.com}"
+if [ -n "$SN_PROJECT_PATH" ]; then
+    TOKEN_FILE="$SCRIPT_DIR/../$SN_PROJECT_PATH/.token_cache.json"
+else
+    TOKEN_FILE="$(find "$SCRIPT_DIR/../projects" -maxdepth 2 -name '.token_cache.json' 2>/dev/null | head -n 1)"
+fi
 
 # Colors
 RED='\033[0;31m'
@@ -25,6 +29,10 @@ usage() {
     echo "  action_id    Action sys_id in snapshot (e.g., b397fbe08785f210f7a2a60d3fbb359a)"
     echo "  operation    Operation to perform (skip-approval, etc.)"
     echo "  --apply      Actually apply changes (default: preview only)"
+    echo ""
+    echo "Environment (optional):"
+    echo "  SN_INSTANCE      ServiceNow instance URL"
+    echo "  SN_PROJECT_PATH  Relative project path (e.g., projects/my-project)"
     echo ""
     echo "Examples:"
     echo "  # Preview DVS approval skip"
@@ -64,7 +72,7 @@ echo ""
 # Check if token file exists
 if [ ! -f "$TOKEN_FILE" ]; then
     echo -e "${RED}ERROR: Token file not found: $TOKEN_FILE${NC}"
-    echo "Please ensure you have authenticated with SNSync"
+    echo "Set SN_PROJECT_PATH or ensure at least one project token cache exists under projects/*/.token_cache.json"
     exit 1
 fi
 

@@ -20,7 +20,7 @@ All commands require the `--project` flag to specify which project configuration
 node snsync --modify-flow \
   --flow-id "88a75b531b8952107fca32231b4bcb09" \
   --operation list \
-  --project "projects/levidev"
+  --project "projects/<project-folder>"
 ```
 
 #### 2. Get action configuration
@@ -29,7 +29,7 @@ node snsync --modify-flow \
   --flow-id "88a75b531b8952107fca32231b4bcb09" \
   --action-id "b397fbe08785f210f7a2a60d3fbb359a" \
   --operation get \
-  --project "projects/levidev"
+  --project "projects/<project-folder>"
 ```
 
 #### 3. Skip approval (auto-approve)
@@ -38,7 +38,7 @@ node snsync --modify-flow \
   --flow-id "88a75b531b8952107fca32231b4bcb09" \
   --action-id "b397fbe08785f210f7a2a60d3fbb359a" \
   --operation skip-approval \
-  --project "projects/levidev"
+  --project "projects/<project-folder>"
 ```
 
 #### 4. Set approval conditions
@@ -48,7 +48,7 @@ node snsync --modify-flow \
   --action-id "b397fbe08785f210f7a2a60d3fbb359a" \
   --operation approval \
   --value "ApprovesRejectsAnyG[{{static.GROUP_SYS_ID}}]" \
-  --project "projects/levidev"
+  --project "projects/<project-folder>"
 ```
 
 #### 5. Modify any action parameter
@@ -60,7 +60,7 @@ node snsync --modify-flow \
   --operation modify \
   --param "field_name" \
   --value "new value" \
-  --project "projects/levidev"
+  --project "projects/<project-folder>"
 
 # Modify a boolean
 node snsync --modify-flow \
@@ -69,7 +69,7 @@ node snsync --modify-flow \
   --operation modify \
   --param "enabled" \
   --value "true" \
-  --project "projects/levidev"
+  --project "projects/<project-folder>"
 
 # Modify a number
 node snsync --modify-flow \
@@ -78,7 +78,7 @@ node snsync --modify-flow \
   --operation modify \
   --param "timeout" \
   --value "30" \
-  --project "projects/levidev"
+  --project "projects/<project-folder>"
 ```
 
 ## How It Works
@@ -109,7 +109,7 @@ FlowModifier class [flow-modifier.js]
 
 ### Method 1: Use list operation
 ```bash
-node snsync --modify-flow --flow-id "FLOW_ID" --operation list --project "projects/levidev"
+node snsync --modify-flow --flow-id "FLOW_ID" --operation list --project "projects/<project-folder>"
 ```
 
 ### Method 2: Flow Designer UI
@@ -156,7 +156,7 @@ node snsync --modify-flow \
   --flow-id "88a75b531b8952107fca32231b4bcb09" \
   --action-id "b397fbe08785f210f7a2a60d3fbb359a" \
   --operation skip-approval \
-  --project "projects/levidev"
+  --project "projects/<project-folder>"
 ```
 
 This changes:
