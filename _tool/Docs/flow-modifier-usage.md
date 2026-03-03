@@ -131,14 +131,14 @@ node snsync --modify-flow \
 
 ```
 # Automatic pull (via --catalog-item)
-pullCatalogItem() [_tool/bin/snsync.js]
+pullCatalogItem() [_tool/sn-sync.js]
     ├─ snClient → sys_update_xml (sys_hub_flow_<id>)  → flow/flow.json
     └─ snClient → wf_workflow + wf_activity            → flow/workflow.json
 
 # Manual flow modification (via --modify-flow)
 snsync CLI
     ↓
-handleFlowModification() [_tool/bin/snsync.js]
+handleFlowModification() [_tool/sn-sync.js]
     ↓
 FlowModifier class [flow-modifier.js]
     ├─ getFlowXML()

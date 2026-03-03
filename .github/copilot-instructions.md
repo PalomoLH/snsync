@@ -6,7 +6,7 @@ This repository contains a tool (`snsync`) for bi-directional synchronization be
 
 The workspace is organized as follows:
 
-- `_tool/`: Contains the synchronization logic (`bin/snsync.js`, `flow-modifier.js`).
+- `_tool/`: Contains the synchronization logic (`sn-sync.js`, `flow-modifier.js`, `bin/snsync.js`).
 - `projects/`: Contains project-specific configurations and data.
   - `<project_name>/` (e.g., `my-project`):
     - `sn-config.json`: Configuration for the project (instance URL, auth, table mappings).
