@@ -3,10 +3,10 @@
     "tasks": [
         {
             "label": "SN: Open Record in Browser 🌎",
-            "type": "shell",
+            "type": "process",
             "command": "node",
             "args": [
-                "${workspaceFolder}/snsync",
+                "${workspaceFolder}\\snsync",
                 "--open",
                 "${file}",
                 "--project",
@@ -24,10 +24,10 @@
         },
         {
             "label": "SN: Push Current File ⬆️",
-            "type": "shell",
+            "type": "process",
             "command": "node",
             "args": [
-                "${workspaceFolder}/snsync",
+                "${workspaceFolder}\\snsync",
                 "--push",
                 "${file}",
                 "--project",
@@ -45,10 +45,10 @@
         },
         {
             "label": "SN: Pull (Download) Project ⬇️",
-            "type": "shell",
+            "type": "process",
             "command": "node",
             "args": [
-                "${workspaceFolder}/snsync",
+                "${workspaceFolder}\\snsync",
                 "--pull",
                 "--project",
                 "${input:pickProject}",
@@ -60,10 +60,10 @@
         },
         {
             "label": "SN: Pull Current Record Only ⬇️",
-            "type": "shell",
+            "type": "process",
             "command": "node",
             "args": [
-                "${workspaceFolder}/snsync",
+                "${workspaceFolder}\\snsync",
                 "--pull",
                 "--target",
                 "${file}",
@@ -84,10 +84,10 @@
         },
         {
             "label": "SN: Pull Custom (Query) 🔍",
-            "type": "shell",
+            "type": "process",
             "command": "node",
             "args": [
-                "${workspaceFolder}/snsync",
+                "${workspaceFolder}\\snsync",
                 "--pull",
                 "--project",
                 "${input:pickProject}",
@@ -96,20 +96,17 @@
                 "--table",
                 "${input:enterTable}",
                 "--query",
-                {
-                    "value": "${input:enterQuery}",
-                    "quoting": "strong"
-                }
+                "${input:enterQuery}"
             ],
             "problemMatcher": [],
             "group": "build"
         },
         {
             "label": "SN: Push Custom (Folder) 📦",
-            "type": "shell",
+            "type": "process",
             "command": "node",
             "args": [
-                "${workspaceFolder}/snsync",
+                "${workspaceFolder}\\snsync",
                 "--push",
                 "--project",
                 "${input:pickProject}",
@@ -123,10 +120,10 @@
         },
         {
             "label": "SN: Push All New Records (All Tables) 🆕📦",
-            "type": "shell",
+            "type": "process",
             "command": "node",
             "args": [
-                "${workspaceFolder}/snsync",
+                "${workspaceFolder}\\snsync",
                 "--push",
                 "--all",
                 "--project",
@@ -144,10 +141,10 @@
         },
         {
             "label": "SN: Push All New Records (Table) 🆕📦",
-            "type": "shell",
+            "type": "process",
             "command": "node",
             "args": [
-                "${workspaceFolder}/snsync",
+                "${workspaceFolder}\\snsync",
                 "--push",
                 "--project",
                 "${input:pickProject}",
@@ -166,10 +163,10 @@
         },
         {
             "label": "SN: Watch (Monitor) Project 👀",
-            "type": "shell",
+            "type": "process",
             "command": "node",
             "args": [
-                "${workspaceFolder}/snsync",
+                "${workspaceFolder}\\snsync",
                 "--watch",
                 "--project",
                 "${input:pickProject}"
@@ -180,10 +177,10 @@
         },
         {
             "label": "SN: Create New Project 🆕",
-            "type": "shell",
+            "type": "process",
             "command": "node",
             "args": [
-                "${workspaceFolder}/_tool/create-project.js",
+                "${workspaceFolder}\\_tool\\create-project.js",
                 "--name", "${input:newProjectName}",
                 "--instance", "${input:newInstanceUrl}",
                 "--clientId", "${input:newClientId}",
