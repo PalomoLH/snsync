@@ -10,7 +10,7 @@
                 "--open",
                 "${file}",
                 "--project",
-                "${fileDirname}"
+                "${fileDirname}" 
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
@@ -180,19 +180,13 @@
             "type": "process",
             "command": "node",
             "args": [
-                "${workspaceFolder}/_tool/create-project.js",
-                "--name",
-                "${input:newProjectName}",
-                "--instance",
-                "${input:newInstanceUrl}",
-                "--clientId",
-                "${input:newClientId}",
-                "--clientSecret",
-                "${input:newClientSecret}",
-                "--user",
-                "${input:newUser}",
-                "--password",
-                "${input:newPassword}"
+                "${workspaceFolder}\\_tool\\create-project.js",
+                "--name", "${input:newProjectName}",
+                "--instance", "${input:newInstanceUrl}",
+                "--clientId", "${input:newClientId}",
+                "--clientSecret", "${input:newClientSecret}",
+                "--user", "${input:newUser}",
+                "--password", "${input:newPassword}"
             ],
             "problemMatcher": [],
             "presentation": {
@@ -207,10 +201,7 @@
             "id": "pickProject",
             "type": "promptString",
             "description": "Relative project folder (e.g., projects/my-project):",
-            "default": "projects/<project-folder>",
-            "options": [
-                "projects/<project-folder>"
-            ]
+            "default": "projects/<project-folder>"
         },
         {
             "id": "contextMode",
