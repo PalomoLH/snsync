@@ -14,33 +14,42 @@ Agile local development CLI and VS Code integration for the ServiceNow platform.
 - **Context Aware**: Each record gets its own folder with separate scripts (`server.js`, `client.js`, `template.html`).
 - **🤖 AI-Ready**: Generates `_ai_context.md` with tags and `_record.json` with metadata to help AI agents understand your ServiceNow instance.
 - **Creation & Bulk Push**: Create new records by just making a folder and pushing it.
+- **🤖 AI Documentation**: Includes detailed instructions for AI agents (`.github/copilot-instructions.md`, `AI_GUIDE.md`).
 
 ---
 
 ## 🛠️ Installation & Setup
 
 ### 1. Dependencies
+
 Ensure Node.js (v18+) is installed.
+
 ```bash
 cd _tool
 npm install
 ```
 
 ### 2. Configure Encryption Secret (Zsh)
+
 To secure the token cache (`.token_cache.json`), define a master password in your system environment variables (not in the project).
 
 Add to your `~/.zshrc` (or `~/.bashrc`):
+
 ```bash
 # Password to encrypt ServiceNow Sync tokens locally
 export SN_ENC_SECRET="a-very-secure-secret-phrase-only-you-know"
 ```
+
 Then reload: `source ~/.zshrc`.
 
 ### 3. Optional: Terminal alias (Zsh)
+
 To run `snsync` from anywhere, add to your `~/.zshrc`:
+
 ```bash
 alias snsync='node /Users/palomo/workspace/sn/_tool/sn-sync.js'
 ```
+
 Then reload: `source ~/.zshrc`. Adjust the path if your repo lives elsewhere.
 
 ---
@@ -48,20 +57,23 @@ Then reload: `source ~/.zshrc`. Adjust the path if your repo lives elsewhere.
 ## 🚀 Usage Guide
 
 ### ⬇️ Pulling Data (Download)
+
 - **Full Project**: Downloads all tables defined in `sn-config.json`.
 - **Custom Query**: Search for specific records interactively.
-    - *Tip*: Enable "AI Context" when asked to tag records with keywords (e.g., `Finance`, `Auth`).
+  - _Tip_: Enable "AI Context" when asked to tag records with keywords (e.g., `Finance`, `Auth`).
 
 ### ⬆️ Pushing Data (Upload & Create)
+
 - **Edit & Sync**: Just save the file (`.js`, `.html`) and run the "Push" task (or use Watch mode).
-- **Create New Record**: 
-    1. Create a folder inside the table folder (e.g., `src/sys_script_include/MyNewScript`).
-    2. Add your `script.js`.
-    3. Run `snsync --push projects/myproject/src/sys_script_include/MyNewScript`.
-    4. The script creates the record, gets the `sys_id`, and saves it locally.
-- **Bulk Create**: Run push on the *Table* folder to create all new subfolders at once.
+- **Create New Record**:
+  1. Create a folder inside the table folder (e.g., `src/sys_script_include/MyNewScript`).
+  2. Add your `script.js`.
+  3. Run `snsync --push projects/myproject/src/sys_script_include/MyNewScript`.
+  4. The script creates the record, gets the `sys_id`, and saves it locally.
+- **Bulk Create**: Run push on the _Table_ folder to create all new subfolders at once.
 
 ### 🧠 AI Features
+
 - **Context Tags**: Every record can have `_ai_context.md`. Search for "Context: MyTag" to find all related files.
 - **Metadata**: `_record.json` contains the full record payload (display values, types) for the AI to analyze.
 
@@ -72,21 +84,25 @@ Use the `--catalog-item` flag to pull everything related to a single catalog ite
 #### 🚀 How to Use
 
 **1. Pull a complete catalog item:**
+
 ```bash
 node snsync --pull --catalog-item <catalog_item_sys_id> --project projects/your-project
 ```
 
 **Example:**
+
 ```bash
 node snsync --pull --catalog-item a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6 --project projects/myproject
 ```
 
 **What gets pulled:**
+
 - ✅ **Catalog item** (settings, description, execution plan)
 - ✅ **All form variables** (questions with editable parameters)
 - ✅ **All client scripts** (onChange, onSubmit validation)
 
 **2. The organized structure:**
+
 ```
 src/
 └── Your_Catalog_Item_Name/
@@ -109,18 +125,20 @@ src/
 ```
 
 **3. Edit files locally:**
+
 ```json
 // Example: catalog_item/_record.json
 {
-    "short_description": { "value": "Request Software License" },
-    "price": { "value": "0" },
-    "active": { "value": "true" },
-    "roles": { "value": "itil,admin", "display_value": "ITIL, Admin" },
-    "no_cart": { "value": "true" }
+  "short_description": { "value": "Request Software License" },
+  "price": { "value": "0" },
+  "active": { "value": "true" },
+  "roles": { "value": "itil,admin", "display_value": "ITIL, Admin" },
+  "no_cart": { "value": "true" }
 }
 ```
 
 **4. Push changes back:**
+
 ```bash
 node snsync --push --project projects/your-project
 ```
@@ -128,6 +146,7 @@ node snsync --push --project projects/your-project
 ✨ **The tool automatically detects which files changed and only pushes those!**
 
 #### 💡 Pro Tips
+
 - **Finding the sys_id**: Open the catalog item in ServiceNow → Right-click header → Copy sys_id
 - **Bulk editing**: Use find/replace across all `_record.json` files to update multiple parameters at once
 - **No prompts**: Unlike custom queries, catalog item pulls run without interruptions (no AI context prompts)
@@ -173,15 +192,18 @@ This will create `projects/client_x` with `.env` and `sn-config.json` ready.
 We recommend using the tasks configured in `.vscode/tasks.json` instead of manual terminal.
 
 ### ⬇️ Pull (Download)
+
 - **SN: Pull (Download) Project**: Downloads EVERYTHING defined in `sn-config.json`.
 - **SN: Pull Custom (Query)**: Downloads only a specific table/query (e.g., `incident` with `active=true`). Note: Ensure custom tables/fields are mapped in `sn-config.json`.
 - **SN: Pull Current Record Only**: If a file is open, updates only that specific record (surgical).
 
 ### ⬆️ Push (Upload)
+
 - **SN: Push Current File**: Sends the file currently open in the editor.
 - **SN: Watch (Monitor)**: Runs in background sending any saved file automatically.
 
 ### 🌎 Utilities
+
 - **SN: Open Record in Browser**: Opens the current file's record directly in the browser.
 
 ---
@@ -191,18 +213,20 @@ We recommend using the tasks configured in `.vscode/tasks.json` instead of manua
 Each project has its `sn-config.json` defining what to sync.
 
 **Example:**
+
 ```json
 "sp_widget": {
     "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
     "fields": ["template", "script", "client_script", "css"],
-    "ext": { 
-        "template": "html", 
-        "script": "server.js", 
-        "client_script": "client.js" 
+    "ext": {
+        "template": "html",
+        "script": "server.js",
+        "client_script": "client.js"
     },
     "saveContext": true
 }
 ```
+
 - **filter**: ServiceNow Encoded Query.
 - **fields**: Table fields to download.
 - **ext**: File extension for each field.
@@ -215,6 +239,7 @@ Each project has its `sn-config.json` defining what to sync.
 The tool supports synchronization for the following ServiceNow tables:
 
 **Core Scripts:**
+
 - `sys_script_include` - Server-side Script Includes
 - `sys_script_client` - Client Scripts
 - `sys_script` - Business Rules
@@ -224,29 +249,34 @@ The tool supports synchronization for the following ServiceNow tables:
 - `sysevent_script_action` - Event Script Actions
 
 **Service Catalog:**
+
 - `sc_cat_item` - Catalog Items
 - `sc_cat_item_producer` - Record Producers
 - `catalog_script_client` - Catalog Client Scripts
 - `item_option_new` - Catalog Variables
 
 **Workflows:**
+
 - `wf_workflow` - Workflow Definitions
-- `wf_activity` - Workflow Activities  
+- `wf_activity` - Workflow Activities
 - `sys_hub_flow` - Flow Designer Flows
 - `sys_hub_action_type_definition` - Flow Designer Actions
 
 **Service Portal:**
+
 - `sp_widget` - Service Portal Widgets
 - `sp_angular_provider` - Angular Providers
 - `sp_page` - Service Portal Pages
 - `sp_css` - Portal CSS
 
 **UI Components:**
+
 - `sys_ui_macro` - UI Macros
 - `sys_ui_page` - UI Pages
 - `sys_ui_policy` - UI Policies
 
 **Integration:**
+
 - `sys_ws_operation` - Web Service Operations
 - `sys_rest_message_fn` - REST Message Functions
 
@@ -255,6 +285,7 @@ The tool supports synchronization for the following ServiceNow tables:
 ## 🔐 Authentication: Browser vs. Basic
 
 ### Recommended: Browser Auth (OAuth)
+
 1. In ServiceNow, create an **OAuth API Endpoint** (Create Application Endpoint).
    - **Redirect URL**: `http://localhost:3000/callback`
 2. Copy Client ID and Client Secret.
@@ -262,6 +293,7 @@ The tool supports synchronization for the following ServiceNow tables:
 4. When running the tool, it will open the browser for you to log in.
 
 ### Alternative: Basic Auth
+
 1. In `.env`, fill `SN_USER` and `SN_PASSWORD`.
 
 ---
