@@ -6,11 +6,16 @@ This repository contains a tool (`snsync`) for bi-directional synchronization be
 
 The workspace is organized as follows:
 
-- `_tool/`: Contains the synchronization logic (`sn-sync.js`, `bin/snsync.js`).
+- `_tool/`: Contains the synchronization logic (`bin/snsync.js`, `flow-modifier.js`).
 - `projects/`: Contains project-specific configurations and data.
   - `<project_name>/` (e.g., `my-project`):
     - `sn-config.json`: Configuration for the project (instance URL, auth, table mappings).
       - **IMPORTANT**: If you need to work with a table that is not yet mapped, add it to the `"folders"` object in `sn-config.json` first.
+    - `src/<CatalogItemName>/`: Catalog items pulled via `--catalog-item` are organized here:
+      - `catalog_item/`: Catalog item settings and description.
+      - `variables/`: Form variables (`item_option_new` records).
+      - `client_scripts/`: Client-side scripts (`catalog_script_client` records).
+      - `flow/`: `flow.json` (Flow Designer) or `workflow.json` (Legacy Workflow Engine).
     - `<table_name>/` (e.g., `sys_script`, `sys_db_object`):
       - `<record_folder>/` (e.g., `my_script_include`):
         - `_record.json`: The metadata/content of the record.
@@ -27,7 +32,7 @@ The workspace is organized as follows:
 
 ## 3. Operations & Commands
 
-Use the `snsync` tool via `node sn-sync.js` (or `node _tool/sn-sync.js`) to interact with ServiceNow.
+Use the `snsync` tool via `node snsync` (from the repo root) to interact with ServiceNow.
 
 ### A. Creating Records (Push)
 
@@ -45,7 +50,7 @@ To create a new record in ServiceNow:
     ```
 3.  **Push**: Run the push command pointing to the _file_ or _folder_.
     ```bash
-    node _tool/sn-sync.js --push projects/<your-project>/<table_name>/<record_name> --project <your-project>
+    node snsync --push projects/<your-project>/<table_name>/<record_name> --project <your-project>
     ```
 
 ### B. Updating Records (Push)
@@ -57,7 +62,7 @@ Edit the `_record.json` file and run the same `--push` command. The tool will up
 To delete a record from ServiceNow and the local file system:
 
 ```bash
-node _tool/sn-sync.js --delete --target projects/<your-project>/<table_name>/<record_name> --project <your-project> --force
+node snsync --delete --target projects/<your-project>/<table_name>/<record_name> --project <your-project> --force
 ```
 
 - Use `--force` to skip interactive confirmation (useful for automated scripts).
@@ -67,10 +72,21 @@ node _tool/sn-sync.js --delete --target projects/<your-project>/<table_name>/<re
 To download specific records from ServiceNow:
 
 ```bash
-node _tool/sn-sync.js --pull --table <table_name> --query "<encoded_query>" --project <your-project>
+node snsync --pull --table <table_name> --query "<encoded_query>" --project <your-project>
 ```
 
 - This will create the folder structure under `projects/<your-project>/<table_name>/<record_sys_id_or_name>`.
+
+### E. Pulling a Complete Catalog Item
+
+To pull a catalog item with everything related (variables, client scripts, flow/workflow) in one command:
+
+```bash
+node snsync --pull --catalog-item <catalog_item_sys_id> --project projects/<your-project>
+```
+
+- Automatically detects Flow Designer (`flow.json`) or Legacy Workflow (`workflow.json`) and saves to `src/<CatalogItemName>/flow/`.
+- The `sys_id` is found in the catalog item URL: `?id=sc_cat_item&sys_id=<here>`.
 
 ## 4. Managing Schema (Tables & Fields)
 
@@ -88,7 +104,7 @@ You can create new Tables and Columns by creating records in `sys_db_object` and
       "sys_scope": "Global"
     }
     ```
-4.  Run: `node _tool/sn-sync.js --push projects/<your-project>/sys_db_object/<table_name_folder> --project <your-project>`
+4.  Run: `node snsync --push projects/<your-project>/sys_db_object/<table_name_folder> --project <your-project>`
 
 ### Creating a Column (`sys_dictionary`)
 
@@ -104,7 +120,7 @@ You can create new Tables and Columns by creating records in `sys_db_object` and
       "max_length": "40"
     }
     ```
-4.  Run: `node _tool/sn-sync.js --push projects/<your-project>/sys_dictionary/<table_column_folder> --project <your-project>`
+4.  Run: `node snsync --push projects/<your-project>/sys_dictionary/<table_column_folder> --project <your-project>`
 
 ## 5. Tips for AI
 
