@@ -1007,7 +1007,7 @@ async function createRecordInServiceNow(
 
   // Only set name from folder if not already set by JSON
   if (!payload.name) {
-      payload.name = recordName;
+    payload.name = recordName;
   }
 
   if (Object.keys(payload).length === 0) {
@@ -1254,33 +1254,33 @@ async function deleteFromServiceNow(target, table, sysId, force = false) {
   }
 
   const performDeleteAction = async () => {
-      console.log(`🗑️  Deleting from ServiceNow...`);
-      try {
-        await snClient.delete(`/api/now/table/${targetTable}/${targetSysId}`);
-        console.log(`   ✅ Record deleted successfully from ServiceNow.`);
+    console.log(`🗑️  Deleting from ServiceNow...`);
+    try {
+      await snClient.delete(`/api/now/table/${targetTable}/${targetSysId}`);
+      console.log(`   ✅ Record deleted successfully from ServiceNow.`);
 
-        if (targetPath && fs.existsSync(targetPath)) {
-          const trashPath = targetPath + "_DELETED";
-          try {
-            fs.renameSync(targetPath, trashPath);
-            console.log(
-              `   🗑️  Local folder moved to: ${path.basename(trashPath)}`,
-            );
-          } catch (err) {
-            console.warn(`   ⚠️ Could not rename local folder: ${err.message}`);
-          }
+      if (targetPath && fs.existsSync(targetPath)) {
+        const trashPath = targetPath + "_DELETED";
+        try {
+          fs.renameSync(targetPath, trashPath);
+          console.log(
+            `   🗑️  Local folder moved to: ${path.basename(trashPath)}`,
+          );
+        } catch (err) {
+          console.warn(`   ⚠️ Could not rename local folder: ${err.message}`);
         }
-      } catch (e) {
-        console.error(
-          `   🔥 Delete Failed:`,
-          e.response?.data?.error?.message || e.message,
-        );
       }
+    } catch (e) {
+      console.error(
+        `   🔥 Delete Failed:`,
+        e.response?.data?.error?.message || e.message,
+      );
+    }
   };
 
   if (force) {
-      await performDeleteAction();
-      return;
+    await performDeleteAction();
+    return;
   }
 
   const rl = readline.createInterface({
