@@ -1038,6 +1038,79 @@ function generateRecordUrl(table, sysId) {
     return `${CONFIG.url}/now/nav/ui/classic/params/target/${encodedTarget}`;
 }
 
+async function deleteFromServiceNow(target, table, sysId) {
+    if (!target && (!table || !sysId)) {
+        console.error('❌ You must specify what to delete.');
+        console.error('   Usage: --delete src/table/folder');
+        console.error('   Usage: --delete --table X --sys_id Y');
+        return;
+    }
+
+    let targetTable = table;
+    let targetSysId = sysId;
+    let targetPath = null;
+
+    if (target && target !== 'true') {
+        const resolved = path.resolve(target);
+        if (fs.existsSync(resolved)) {
+            // If user passed a FILE in a folder, get the folder
+            let searchPath = resolved;
+            if (fs.lstatSync(resolved).isFile()) searchPath = path.dirname(resolved);
+            
+            targetPath = searchPath;
+            
+            // Try to find .sys_id
+            const sysIdPath = path.join(searchPath, '.sys_id');
+            if (fs.existsSync(sysIdPath)) {
+                targetSysId = fs.readFileSync(sysIdPath, 'utf8').trim();
+                const tableDir = path.dirname(searchPath);
+                targetTable = path.basename(tableDir);
+            }
+        }
+    }
+
+    if (!targetTable || !targetSysId) {
+        console.error('❌ Could not identify Table and SysID (missing .sys_id file?).');
+        return;
+    }
+
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    
+    console.log(`\n⚠️  WARNING: You are about to DELETE the remote record:`);
+    console.log(`   Table: ${targetTable}`);
+    console.log(`   SysID: ${targetSysId}`);
+    if (targetPath) console.log(`   Local: ${targetPath}`);
+    
+    rl.question('\n🔴 Are you sure? Type "delete" to confirm: ', async (answer) => {
+        if (answer !== 'delete') {
+            console.log('❌ Cancelled.');
+            rl.close();
+            return;
+        }
+
+        console.log(`🗑️  Deleting from ServiceNow...`);
+        try {
+            await snClient.delete(`/api/now/table/${targetTable}/${targetSysId}`);
+            console.log(`   ✅ Record deleted successfully from ServiceNow.`);
+            
+            if (targetPath && fs.existsSync(targetPath)) {
+                 const trashPath = targetPath + '_DELETED';
+                 try {
+                    fs.renameSync(targetPath, trashPath);
+                    console.log(`   🗑️  Local folder moved to: ${path.basename(trashPath)}`);
+                 } catch (err) {
+                     console.warn(`   ⚠️ Could not rename local folder: ${err.message}`);
+                 }
+            }
+        } catch (e) {
+             console.error(`   🔥 Delete Failed:`, e.response?.data?.error?.message || e.message);
+        } finally {
+            rl.close();
+        }
+    });
+}
+
+
 async function handleOpen(target) {
     if (!target || target === 'true') {
         console.log('❌ You must specify the file or folder to open.');
@@ -1370,6 +1443,12 @@ else if (args.includes('--push')) {
 else if (args.includes('--open')) {
     const target = getArgValue('--open');
     handleOpen(target);
+}
+else if (args.includes('--delete')) {
+    const target = getArgValue('--delete'); // Folder path
+    const table = getArgValue('--table');
+    const sysId = getArgValue('--sys_id');
+    deleteFromServiceNow(target, table, sysId);
 }
 else if (args.includes('--watch')) {
     console.log(`👀 Monitoring: ${CONFIG.localFolder}`);

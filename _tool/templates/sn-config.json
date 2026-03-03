@@ -507,6 +507,66 @@
         "cmn_location": {
             "onlyContext": true,
             "filter": "sys_idISNOTEMPTY"
+        },
+        "sys_db_object": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": ["name", "label"],
+            "ext": {
+                "name": "txt",
+                "label": "txt"
+            },
+            "saveContext": true
+        },
+        "sys_dictionary": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": ["name", "element", "internal_type"],
+            "ext": {
+                "element": "txt",
+                "internal_type": "txt"
+            },
+            "saveContext": true
+        },
+        "sys_choice": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": ["label", "value", "element"],
+            "ext": {
+                "label": "txt",
+                "value": "txt"
+            },
+            "saveContext": true
+        },
+        "wf_workflow": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": ["name", "description"],
+            "ext": {
+                "description": "txt"
+            },
+            "saveContext": true
+        },
+        "sys_ui_policy": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": ["short_description", "script_true", "script_false"],
+            "ext": {
+                "script_true": "js",
+                "script_false": "js"
+            },
+            "saveContext": true
+        },
+        "sys_ui_policy_action": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": ["field", "mandatory", "visible", "disabled"],
+            "ext": {
+                "field": "txt"
+            },
+            "saveContext": true
+        },
+        "syslog": {
+            "filter": "sys_created_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": ["message", "level", "source"],
+            "ext": {
+                "message": "log"
+            },
+            "saveContext": false
         }
     }
 }
