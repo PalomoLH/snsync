@@ -1005,7 +1005,10 @@ async function createRecordInServiceNow(
     }
   }
 
-  payload.name = recordName;
+  // Only set name from folder if not already set by JSON
+  if (!payload.name) {
+      payload.name = recordName;
+  }
 
   if (Object.keys(payload).length === 0) {
     console.error(
