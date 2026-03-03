@@ -148,6 +148,16 @@ node snsync --push --project projects/your-project
 
 ✨ **The tool automatically detects which files changed and only pushes those!**
 
+**5. Validate UI-to-script mapping after catalog changes:**
+```bash
+node snsync --validate-catalog-mapping --project projects/your-project
+```
+
+Optional flags:
+- `--catalog Access_request_to_GitHub` (validate one catalog folder)
+- `--catalog-path src` (custom catalog base path)
+- `--strict` (fail if expected catalog folder is missing)
+
 #### 🎯 Editing Flow Designer Workflows
 
 If your catalog item has a flow assigned, it's automatically pulled as `flow/flow.json` with **all actions decoded** and ready to edit!
