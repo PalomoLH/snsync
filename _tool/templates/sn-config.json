@@ -172,7 +172,7 @@
                 "sp_row",
                 "size_xs",
                 "size_sm",
-                "size", 
+                "size",
                 "size_lg",
                 "class_name",
                 "order"
@@ -185,7 +185,7 @@
                 "title",
                 "id",
                 "class_name",
-                "order", 
+                "order",
                 "sp_column",
                 "active",
                 "size",
@@ -510,7 +510,10 @@
         },
         "sys_db_object": {
             "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
-            "fields": ["name", "label"],
+            "fields": [
+                "name",
+                "label"
+            ],
             "ext": {
                 "name": "txt",
                 "label": "txt"
@@ -519,7 +522,11 @@
         },
         "sys_dictionary": {
             "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
-            "fields": ["name", "element", "internal_type"],
+            "fields": [
+                "name",
+                "element",
+                "internal_type"
+            ],
             "ext": {
                 "element": "txt",
                 "internal_type": "txt"
@@ -528,7 +535,11 @@
         },
         "sys_choice": {
             "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
-            "fields": ["label", "value", "element"],
+            "fields": [
+                "label",
+                "value",
+                "element"
+            ],
             "ext": {
                 "label": "txt",
                 "value": "txt"
@@ -537,7 +548,10 @@
         },
         "wf_workflow": {
             "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
-            "fields": ["name", "description"],
+            "fields": [
+                "name",
+                "description"
+            ],
             "ext": {
                 "description": "txt"
             },
@@ -545,7 +559,11 @@
         },
         "sys_ui_policy": {
             "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
-            "fields": ["short_description", "script_true", "script_false"],
+            "fields": [
+                "short_description",
+                "script_true",
+                "script_false"
+            ],
             "ext": {
                 "script_true": "js",
                 "script_false": "js"
@@ -554,7 +572,12 @@
         },
         "sys_ui_policy_action": {
             "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
-            "fields": ["field", "mandatory", "visible", "disabled"],
+            "fields": [
+                "field",
+                "mandatory",
+                "visible",
+                "disabled"
+            ],
             "ext": {
                 "field": "txt"
             },
@@ -562,7 +585,11 @@
         },
         "syslog": {
             "filter": "sys_created_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
-            "fields": ["message", "level", "source"],
+            "fields": [
+                "message",
+                "level",
+                "source"
+            ],
             "ext": {
                 "message": "log"
             },
