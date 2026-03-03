@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-// Lightweight bridge so editors can call a single command (`node snsync`)
+// Lightweight bridge so editors can call a single command (`snsync`)
 // regardless of where the repo lives on disk.
 const { spawn } = require('node:child_process');
 const path = require('node:path');
