@@ -401,6 +401,20 @@
             },
             "saveContext": true
         },
+        "sys_hub_action_instance": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "jsonExport": [
+                "name",
+                "action_name",
+                "action",
+                "flow",
+                "x",
+                "y",
+                "internal_properties",
+                "active"
+            ],
+            "saveContext": true
+        },
         "sp_portal": {
             "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
             "fields": [
