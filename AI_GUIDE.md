@@ -13,7 +13,7 @@ This repository uses a Node.js CLI tool (`_tool/sn-sync.js`) to sync local files
 ## Project Structure
 
 - `_tool/`: Tool source code.
-- `projects/levidev/`: The active project folder.
+- `projects/<your-project>/`: The active project folder.
   - `sn-config.json`: Configuration file. defines table mappings.
   - `<table_name>/`: Folders named after ServiceNow tables (e.g., `sys_script`).
     - `<record_folder>/`: Folders named after records.
@@ -26,10 +26,10 @@ This repository uses a Node.js CLI tool (`_tool/sn-sync.js`) to sync local files
 To create or update a record:
 
 1.  **Identify the Table**: Determine the ServiceNow table (e.g., `sys_user`, `sys_script_include`).
-2.  **Verify Mapping**: Check `projects/levidev/sn-config.json`. If the table is not in `"folders"`, add it.
+2.  **Verify Mapping**: Check `projects/<your-project>/sn-config.json`. If the table is not in `"folders"`, add it.
 3.  **Create File Structure**:
-    - `mkdir -p projects/levidev/<table_name>/<record_name>`
-    - Create `projects/levidev/<table_name>/<record_name>/_record.json`
+    - `mkdir -p projects/<your-project>/<table_name>/<record_name>`
+    - Create `projects/<your-project>/<table_name>/<record_name>/_record.json`
 4.  **Populate JSON**:
     ```json
     {
@@ -41,7 +41,7 @@ To create or update a record:
     ```
 5.  **Push**:
     ```bash
-    node _tool/sn-sync.js --push projects/levidev/<table_name>/<record_name> --project levidev
+    node _tool/sn-sync.js --push projects/<your-project>/<table_name>/<record_name> --project <your-project>
     ```
 
 ### 2. Delete Records
@@ -49,7 +49,7 @@ To create or update a record:
 To delete a record:
 
 ```bash
-node _tool/sn-sync.js --delete --target projects/levidev/<table_name>/<record_name> --project levidev --force
+node _tool/sn-sync.js --delete --target projects/<your-project>/<table_name>/<record_name> --project <your-project> --force
 ```
 
 ### 3. Schema Management
@@ -63,7 +63,7 @@ node _tool/sn-sync.js --delete --target projects/levidev/<table_name>/<record_na
 
 - **JSON Formatting**: Always use valid JSON.
 - **Naming**: Use descriptive folder names. The tool uses `_record.json` content for actual record values, but the folder name helps organization.
-- **Paths**: Always use relative paths from the workspace root (e.g., `projects/levidev/...`).
+- **Paths**: Always use relative paths from the workspace root (e.g., `projects/<your-project>/...`).
 - **Dependencies**: Be aware of reference fields. For example, create the Table (`sys_db_object`) before creating Columns (`sys_dictionary`) for it.
 
 ## Troubleshooting

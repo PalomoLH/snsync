@@ -146,21 +146,20 @@ while (gr.next()) {
 - All modifications update sys_update_xml records
 - Changes take effect immediately (no flow republish needed)
 
-## DVS Approval Removal Example
+## Approval Removal Example
 
-The original use case that drove this implementation:
+Skip a specific approval step (set to auto-approve):
 
 ```bash
-# Skip DVS approval (set to auto-approve)
 node snsync --modify-flow \
-  --flow-id "88a75b531b8952107fca32231b4bcb09" \
-  --action-id "b397fbe08785f210f7a2a60d3fbb359a" \
+  --flow-id "<flow-sys-id>" \
+  --action-id "<action-sys-id>" \
   --operation skip-approval \
-  --project "projects/<project-folder>"
+  --project "projects/<your-project>"
 ```
 
 This changes:
-- **Old**: `ApprovesRejectsAnyG[{{static.d3a933afc383ee1048abf00c0501311b}}]`
+- **Old**: `ApprovesRejectsAnyG[{{static.<group-sys-id>}}]`
 - **New**: `` (empty = auto-approved)
 
-Manager approval remains intact, only DVS approval is skipped.
+Other approval steps remain intact; only the targeted approval is skipped.
