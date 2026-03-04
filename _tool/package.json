@@ -7,11 +7,14 @@
   },
   "main": "sn-sync.js",
   "dependencies": {
-    "axios": "^1.6.0",
+    "axios": "^1.13.6",
     "chokidar": "^3.5.3",
     "dotenv": "^16.3.1",
     "express": "^5.2.1",
     "fs-extra": "^11.1.1",
     "open": "^8.4.2"
+  },
+  "overrides": {
+    "qs": "^6.15.0"
   }
 }
