@@ -12,6 +12,11 @@ const FlowModifier = require("./flow-modifier");
 // Checks if --project "path/to/folder" was passed
 const args = process.argv.slice(2);
 const projectIdx = args.indexOf("--project");
+const updateSetIdx = args.indexOf("--update-set");
+const cliUpdateSetSysId =
+  updateSetIdx !== -1 && args[updateSetIdx + 1] && !args[updateSetIdx + 1].startsWith("--")
+    ? args[updateSetIdx + 1].trim()
+    : null;
 if (projectIdx !== -1 && args[projectIdx + 1]) {
   const targetProject = args[projectIdx + 1];
   if (fs.existsSync(targetProject)) {
@@ -116,6 +121,8 @@ const AUTH_MODE = USE_BROWSER_AUTH
 
 console.log(`🔐 Authentication Mode: ${AUTH_MODE}`);
 
+let snUpdateSetSysId = null;
+
 const CONFIG = {
   url: process.env.SN_INSTANCE,
   basicAuth: {
@@ -133,6 +140,9 @@ const CONFIG = {
   tokenCache: path.join(CURRENT_DIR, ".token_cache.json"),
   mapping: loadMappingConfig(),
 };
+
+// CLI --update-set overrides whatever sn-config.json defined
+if (cliUpdateSetSysId) snUpdateSetSysId = cliUpdateSetSysId;
 
 // --- FUNCTION: BROWSER LOGIN (Local Server) ---
 async function startBrowserLogin() {
@@ -281,6 +291,9 @@ snClient.interceptors.request.use(async (reqConfig) => {
   } else if (AUTH_MODE === "BASIC") {
     reqConfig.auth = CONFIG.basicAuth;
   }
+  if (snUpdateSetSysId) {
+    reqConfig.headers["X-UpdateSet"] = snUpdateSetSysId;
+  }
   return reqConfig;
 });
 
@@ -290,6 +303,7 @@ function loadMappingConfig() {
   if (fs.existsSync(configPath)) {
     console.log("⚙️  Loading sn-config.json from project...");
     const loaded = fs.readJsonSync(configPath);
+    if (loaded.updateSetSysId) snUpdateSetSysId = loaded.updateSetSysId;
     return loaded.mapping || loaded;
   }
 
@@ -1244,6 +1258,52 @@ function resolveFieldByConfig(table, fileName) {
   return null;
 }
 
+// --- Push flow.json back to ServiceNow ---
+async function pushFlowJson(flowJsonPath) {
+  console.log("\n🔄 Pushing flow.json to ServiceNow...");
+  const flowJson = fs.readJsonSync(flowJsonPath);
+  const meta = flowJson._meta;
+  const actions = flowJson.actions || {};
+
+  if (!meta || !meta.sys_id || !meta.flow_id) {
+    console.error("❌ flow.json is missing _meta.sys_id or _meta.flow_id");
+    return;
+  }
+
+  // Get the current XML from ServiceNow
+  console.log(`   📥 Fetching current XML for flow: ${meta.flow_id}...`);
+  const xmlRes = await snClient.get(`/api/now/table/sys_update_xml/${meta.sys_id}`);
+  const flowData = xmlRes.data?.result;
+  if (!flowData || !flowData.payload) {
+    console.error("❌ Could not retrieve flow XML from ServiceNow.");
+    return;
+  }
+
+  const flowModifier = new FlowModifier(CONFIG.url, "unused");
+  let xml = flowData.payload;
+  let modified = 0;
+
+  for (const [actionSysId, actionData] of Object.entries(actions)) {
+    try {
+      const newEncoded = await flowModifier.encodeActionValues(actionData.config);
+      xml = flowModifier.replaceActionInXML(xml, actionSysId, newEncoded);
+      modified++;
+    } catch (e) {
+      console.warn(`   ⚠️  Could not encode action ${actionSysId}: ${e.message}`);
+    }
+  }
+
+  console.log(`   📝 Re-encoded ${modified}/${Object.keys(actions).length} actions.`);
+  console.log(`   ⬆️  Pushing to ServiceNow...`);
+  const flowPayload = { payload: xml };
+  if (snUpdateSetSysId) {
+    flowPayload.update_set = snUpdateSetSysId;
+    console.log(`   📋 Targeting Update Set: ${snUpdateSetSysId}`);
+  }
+  await snClient.put(`/api/now/table/sys_update_xml/${meta.sys_id}`, flowPayload);
+  console.log("✅ Flow pushed successfully!");
+}
+
 async function pushToServiceNow(filePath) {
   const fileName = path.basename(filePath);
 
@@ -1533,6 +1593,12 @@ async function handleManualPush(target, table, name) {
   // Case 1: Single File
   if (stats.isFile()) {
     console.log(`   📄 Single file detected: ${path.basename(targetPath)}`);
+
+    // Special case: flow.json (Flow Designer)
+    if (path.basename(targetPath) === "flow.json") {
+      await pushFlowJson(targetPath);
+      return;
+    }
     // If file is inside a "New Record" folder (no .sys_id), this calls pushToServiceNow which fails/skips?
     // We probably assume user knows what they are doing.
     // But if they push a single file in a new record, maybe they want to create the record?
@@ -1681,6 +1747,19 @@ async function handleManualPush(target, table, name) {
         }
       }
 
+      // Push flow (flow.json / workflow.json)
+      const flowFolder = path.join(targetPath, "flow");
+      if (fs.existsSync(flowFolder)) {
+        const flowJsonPath = path.join(flowFolder, "flow.json");
+        const workflowJsonPath = path.join(flowFolder, "workflow.json");
+        if (fs.existsSync(flowJsonPath)) {
+          console.log(`   🔄 Pushing flow...`);
+          await pushFlowJson(flowJsonPath);
+        } else if (fs.existsSync(workflowJsonPath)) {
+          console.log(`   ⚠️  workflow.json push not yet supported (legacy engine).`);
+        }
+      }
+
       console.log("   ✅ Catalog item push complete!");
       return;
     }
@@ -1751,6 +1830,54 @@ function getArgValue(flag) {
   const next = idx !== -1 && args[idx + 1] ? args[idx + 1] : null;
   return next && !next.startsWith("--") ? next : null;
 }
+
+// Resolves an Update Set name (e.g. "Github Form Updates") to its sys_id.
+// If the input already looks like a 32-char hex sys_id, it is returned as-is.
+async function resolveUpdateSetSysId(nameOrSysId) {
+  if (!nameOrSysId || !nameOrSysId.trim()) return null;
+  const value = nameOrSysId.trim();
+
+  // Already a sys_id (32 hex chars)
+  if (/^[a-f0-9]{32}$/i.test(value)) return value;
+
+  console.log(`🔍 Looking up Update Set: "${value}"...`);
+  try {
+    const res = await snClient.get("/api/now/table/sys_update_set", {
+      params: {
+        sysparm_query: `nameLIKE${value}^state=in progress`,
+        sysparm_fields: "sys_id,name,state",
+        sysparm_limit: 10,
+      },
+    });
+    const records = res.data.result || [];
+    if (records.length === 0) {
+      console.error(`❌ No Update Set found matching "${value}".`);
+      console.error("   Make sure the name is correct and the Update Set is 'In Progress'.");
+      process.exit(1);
+    }
+    if (records.length === 1) {
+      console.log(`✅ Update Set resolved: "${records[0].name}" (${records[0].sys_id})`);
+      return records[0].sys_id;
+    }
+    // Multiple matches — list them and pick the first exact match, or the first result
+    console.log(`⚠️  Multiple Update Sets matched "${value}":`);
+    records.forEach((r, i) => console.log(`   [${i + 1}] ${r.name} (${r.sys_id})`));
+    const exact = records.find((r) => r.name.toLowerCase() === value.toLowerCase());
+    const chosen = exact || records[0];
+    console.log(`   → Using: "${chosen.name}" (${chosen.sys_id})`);
+    return chosen.sys_id;
+  } catch (err) {
+    console.error(`❌ Error resolving Update Set: ${err.message}`);
+    process.exit(1);
+  }
+}
+
+async function main() {
+  // Resolve --update-set name → sys_id before any push/pull
+  const rawUpdateSet = cliUpdateSetSysId || snUpdateSetSysId;
+  if (rawUpdateSet) {
+    snUpdateSetSysId = await resolveUpdateSetSysId(rawUpdateSet);
+  }
 
 if (args.includes("--pull")) {
   const catalogItemId = getArgValue("--catalog-item");
@@ -1848,6 +1975,60 @@ if (args.includes("--pull")) {
     }
     pushToServiceNow(filePath);
   });
+} else if (args.includes("--modify-flow")) {
+  const flowId = getArgValue("--flow-id");
+  const actionId = getArgValue("--action-id");
+  const operation = getArgValue("--operation") || "list";
+  const param = getArgValue("--param");
+  const value = getArgValue("--value");
+
+  if (!flowId) {
+    console.error("❌ --modify-flow requires --flow-id <sys_id>");
+    process.exit(1);
+  }
+
+  const token = await getValidToken();
+  const flowModifier = new FlowModifier(CONFIG.url, token, snUpdateSetSysId);
+
+  if (operation === "list") {
+    const actions = await flowModifier.listFlowActions(flowId);
+    console.log(`\n📋 Actions in flow ${flowId}:`);
+    actions.forEach((a) =>
+      console.log(`   [${a.order}] ${a.sys_id}  ui_id: ${a.ui_id}`)
+    );
+  } else if (operation === "get") {
+    if (!actionId) { console.error("❌ --operation get requires --action-id"); process.exit(1); }
+    const config = await flowModifier.getActionConfig(flowId, actionId);
+    console.log(JSON.stringify(config, null, 2));
+  } else if (operation === "skip-approval") {
+    if (!actionId) { console.error("❌ --operation skip-approval requires --action-id"); process.exit(1); }
+    await flowModifier.skipApproval(flowId, actionId, { push: true });
+  } else if (operation === "approval") {
+    if (!actionId) { console.error("❌ --operation approval requires --action-id"); process.exit(1); }
+    if (value === null) { console.error("❌ --operation approval requires --value"); process.exit(1); }
+    await flowModifier.modifyApprovalConditions(flowId, actionId, value, { push: true });
+  } else if (operation === "modify") {
+    if (!actionId) { console.error("❌ --operation modify requires --action-id"); process.exit(1); }
+    if (!param) { console.error("❌ --operation modify requires --param"); process.exit(1); }
+    if (value === null) { console.error("❌ --operation modify requires --value"); process.exit(1); }
+    // Auto-cast value type
+    let castValue = value;
+    if (value === "true") castValue = true;
+    else if (value === "false") castValue = false;
+    else if (!isNaN(value) && value !== "") castValue = Number(value);
+    await flowModifier.modifyActionParameter(flowId, actionId, param, castValue, { push: true });
+  } else {
+    console.error(`❌ Unknown operation: ${operation}`);
+    console.error("   Valid operations: list, get, skip-approval, approval, modify");
+    process.exit(1);
+  }
 } else {
   console.log("Commands: node snsync --pull | node snsync --watch");
 }
+
+} // end main()
+
+main().catch((err) => {
+  console.error("❌ Fatal error:", err.message);
+  process.exit(1);
+});

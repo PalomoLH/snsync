@@ -143,10 +143,10 @@ src/
 **4. Push changes back:**
 
 ```bash
-node snsync --push --project projects/your-project
+node snsync --push --project projects/your-project --update-set "My Update Set"
 ```
 
-✨ **The tool automatically detects which files changed and only pushes those!**
+> 💡 Leave `--update-set` out to use the instance's current active Update Set, or set `updateSetSysId` permanently in `sn-config.json`.
 
 **5. Validate UI-to-script mapping after catalog changes:**
 ```bash
@@ -210,10 +210,10 @@ If your catalog item has a flow assigned, it's automatically pulled as `flow/flo
 
 After editing, just push:
 ```bash
-node snsync --push projects/your-project/src/Your_Catalog_Item/flow/flow.json
+node snsync --push projects/your-project/src/Your_Catalog_Item/flow/flow.json --project projects/your-project --update-set "My Update Set"
 ```
 
-✨ **The tool automatically re-encodes, validates, and pushes the flow!**
+✨ **The tool automatically re-encodes, validates, and pushes the flow into your Update Set!**
 
 #### 💡 Pro Tips
 
@@ -269,7 +269,7 @@ We recommend using the tasks configured in `.vscode/tasks.json` instead of manua
 
 ### ⬆️ Push (Upload)
 
-- **SN: Push Current File**: Sends the file currently open in the editor.
+- **SN: Push Current File**: Sends the file currently open in the editor. Prompts for an Update Set name (leave blank to use the instance default).
 - **SN: Watch (Monitor)**: Runs in background sending any saved file automatically.
 
 ### 🌎 Utilities
@@ -282,7 +282,18 @@ We recommend using the tasks configured in `.vscode/tasks.json` instead of manua
 
 Each project has its `sn-config.json` defining what to sync.
 
-**Example:**
+**Update Set (optional):**
+
+```json
+{
+    "updateSetSysId": "My Update Set Name",
+    "mapping": { ... }
+}
+```
+
+Set this once to avoid being prompted on every push. Accepts a name (resolved automatically) or a 32-char sys_id. Leave empty to use the instance's current active Update Set.
+
+**Table mapping example:**
 
 ```json
 "sp_widget": {

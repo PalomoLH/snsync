@@ -12,15 +12,19 @@ const gzip = promisify(zlib.gzip);
 const gunzip = promisify(zlib.gunzip);
 
 class FlowModifier {
-    constructor(instance, token) {
+    constructor(instance, token, updateSetSysId = null) {
         this.instance = instance.replace(/\/$/, ''); // Remove trailing slash
         this.token = token;
+        this.updateSetSysId = updateSetSysId;
+        const extraHeaders = {};
+        if (updateSetSysId) extraHeaders['X-UpdateSet'] = updateSetSysId;
         this.api = axios.create({
             baseURL: `${this.instance}/api/now`,
             headers: {
                 'Authorization': `Bearer ${token}`,
                 'Accept': 'application/json',
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                ...extraHeaders
             },
             timeout: 30000 // 30 second timeout
         });

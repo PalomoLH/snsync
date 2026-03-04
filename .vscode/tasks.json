@@ -6,7 +6,7 @@
             "type": "process",
             "command": "node",
             "args": [
-                "${workspaceFolder}\\snsync",
+                "${workspaceFolder}/snsync",
                 "--open",
                 "${file}",
                 "--project",
@@ -27,11 +27,13 @@
             "type": "process",
             "command": "node",
             "args": [
-                "${workspaceFolder}\\snsync",
+                "${workspaceFolder}/snsync",
                 "--push",
                 "${file}",
                 "--project",
-                "${fileDirname}"
+                "${fileDirname}",
+                "--update-set",
+                "${input:updateSetSysId}"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
@@ -48,7 +50,7 @@
             "type": "process",
             "command": "node",
             "args": [
-                "${workspaceFolder}\\snsync",
+                "${workspaceFolder}/snsync",
                 "--pull",
                 "--project",
                 "${input:pickProject}",
@@ -63,7 +65,7 @@
             "type": "process",
             "command": "node",
             "args": [
-                "${workspaceFolder}\\snsync",
+                "${workspaceFolder}/snsync",
                 "--pull",
                 "--target",
                 "${file}",
@@ -87,7 +89,7 @@
             "type": "process",
             "command": "node",
             "args": [
-                "${workspaceFolder}\\snsync",
+                "${workspaceFolder}/snsync",
                 "--pull",
                 "--project",
                 "${input:pickProject}",
@@ -106,14 +108,16 @@
             "type": "process",
             "command": "node",
             "args": [
-                "${workspaceFolder}\\snsync",
+                "${workspaceFolder}/snsync",
                 "--push",
                 "--project",
                 "${input:pickProject}",
                 "--table",
                 "${input:enterTable}",
                 "--name",
-                "${input:enterFolderName}"
+                "${input:enterFolderName}",
+                "--update-set",
+                "${input:updateSetSysId}"
             ],
             "problemMatcher": [],
             "group": "build"
@@ -123,11 +127,13 @@
             "type": "process",
             "command": "node",
             "args": [
-                "${workspaceFolder}\\snsync",
+                "${workspaceFolder}/snsync",
                 "--push",
                 "--all",
                 "--project",
-                "${input:pickProject}"
+                "${input:pickProject}",
+                "--update-set",
+                "${input:updateSetSysId}"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
@@ -144,12 +150,14 @@
             "type": "process",
             "command": "node",
             "args": [
-                "${workspaceFolder}\\snsync",
+                "${workspaceFolder}/snsync",
                 "--push",
                 "--project",
                 "${input:pickProject}",
                 "--table",
-                "${input:enterTable}"
+                "${input:enterTable}",
+                "--update-set",
+                "${input:updateSetSysId}"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
@@ -166,7 +174,7 @@
             "type": "process",
             "command": "node",
             "args": [
-                "${workspaceFolder}\\snsync",
+                "${workspaceFolder}/snsync",
                 "--watch",
                 "--project",
                 "${input:pickProject}"
@@ -180,7 +188,7 @@
             "type": "process",
             "command": "node",
             "args": [
-                "${workspaceFolder}\\_tool\\create-project.js",
+                "${workspaceFolder}/_tool/create-project.js",
                 "--name", "${input:newProjectName}",
                 "--instance", "${input:newInstanceUrl}",
                 "--clientId", "${input:newClientId}",
@@ -197,6 +205,12 @@
         }
     ],
     "inputs": [
+        {
+            "id": "updateSetSysId",
+            "type": "promptString",
+            "description": "Update Set - name (e.g. 'Sprint 42 Changes') or sys_id (leave empty for instance default):",
+            "default": ""
+        },
         {
             "id": "pickProject",
             "type": "promptString",

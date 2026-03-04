@@ -1,4 +1,26 @@
-# Flow Modifier - Usage Examples
+# Flow Modifier - Usage Guide
+
+## Recommended Workflow: Edit Locally → Push
+
+The simplest and safest way to modify a Flow Designer flow:
+
+**1. Pull the catalog item (downloads `flow.json` with all actions decoded):**
+```bash
+node snsync --pull --catalog-item <catalog_item_sys_id> --project projects/<project-folder>
+```
+
+**2. Edit `src/<CatalogItemName>/flow/flow.json` directly** — actions are human-readable JSON.
+
+**3. Push back to ServiceNow (re-encodes automatically):**
+```bash
+node snsync --push projects/<project-folder>/src/<CatalogItemName>/flow/flow.json \
+  --project projects/<project-folder> \
+  --update-set "My Update Set"
+```
+
+The tool fetches the current XML from ServiceNow, re-encodes every action, and writes it back to `sys_update_xml` — tracked in the specified Update Set.
+
+---
 
 ## Automatic Flow Pulling via `--catalog-item`
 
@@ -75,7 +97,8 @@ node snsync --modify-flow \
   --flow-id "<flow-sys-id>" \
   --action-id "<action-sys-id>" \
   --operation skip-approval \
-  --project "projects/<project-folder>"
+  --project "projects/<project-folder>" \
+  --update-set "My Update Set"
 ```
 
 #### 4. Set approval conditions
@@ -85,7 +108,8 @@ node snsync --modify-flow \
   --action-id "<action-sys-id>" \
   --operation approval \
   --value "ApprovesRejectsAnyG[{{static.GROUP_SYS_ID}}]" \
-  --project "projects/<project-folder>"
+  --project "projects/<project-folder>" \
+  --update-set "My Update Set"
 ```
 
 #### 5. Modify any action parameter
@@ -130,22 +154,28 @@ node snsync --modify-flow \
 ## Architecture
 
 ```
-# Automatic pull (via --catalog-item)
+# Recommended: Edit flow.json locally then push
 pullCatalogItem() [_tool/sn-sync.js]
-    ├─ snClient → sys_update_xml (sys_hub_flow_<id>)  → flow/flow.json
-    └─ snClient → wf_workflow + wf_activity            → flow/workflow.json
+    └─ snClient → sys_update_xml (sys_hub_flow_<id>)  → flow/flow.json (decoded)
 
-# Manual flow modification (via --modify-flow)
-snsync CLI
+User edits flow.json
+
+pushFlowJson() [_tool/sn-sync.js]
+    ├─ snClient GET  → sys_update_xml (fetch current XML)
+    ├─ FlowModifier.encodeActionValues() × N actions
+    └─ snClient PUT  → sys_update_xml { payload, update_set }
+
+# CLI power-user: --modify-flow (single action, no local file needed)
+snsync CLI --modify-flow
     ↓
-handleFlowModification() [_tool/sn-sync.js]
+main() [_tool/sn-sync.js]
     ↓
 FlowModifier class [flow-modifier.js]
     ├─ getFlowXML()
     ├─ decodeActionValues()
-    ├─ modifyApprovalConditions()
+    ├─ modifyApprovalConditions() / modifyActionParameter()
     ├─ encodeActionValues()
-    └─ pushFlowXML()
+    └─ pushFlowXML()  ← honours updateSetSysId constructor param
 ```
 
 ## Finding Action IDs
@@ -199,7 +229,8 @@ node snsync --modify-flow \
   --flow-id "<flow-sys-id>" \
   --action-id "<action-sys-id>" \
   --operation skip-approval \
-  --project "projects/<your-project>"
+  --project "projects/<your-project>" \
+  --update-set "My Update Set"
 ```
 
 This changes:
