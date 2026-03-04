@@ -1304,7 +1304,7 @@ async function pushFlowJson(flowJsonPath) {
   console.log("✅ Flow pushed successfully!");
 }
 
-async function pushToServiceNow(filePath) {
+async function pushToServiceNow(filePath, tableOverride = null) {
   const fileName = path.basename(filePath);
 
   // Ignore context files, hidden files and AI metadata
@@ -1321,7 +1321,9 @@ async function pushToServiceNow(filePath) {
   // --- NEW MODE (FOLDERS) ---
   if (fs.existsSync(sysIdPath)) {
     sysId = fs.readFileSync(sysIdPath, "utf8").trim();
-    table = path.basename(parentDir); // Assume: src/table/Record/file.js
+    // Use tableOverride when the folder name doesn't match the SN table name
+    // (e.g. catalog client scripts live under 'client_scripts/' but the SN table is 'catalog_script_client')
+    table = tableOverride || path.basename(parentDir); // Assume: src/table/Record/file.js
 
     const resolved = resolveFieldByConfig(table, fileName);
     if (resolved) {
@@ -1347,8 +1349,8 @@ async function pushToServiceNow(filePath) {
     }
   }
 
-  // Security validation
-  if (!CONFIG.mapping[table]) return;
+  // Security validation: skip mapping check when table is explicitly overridden
+  if (!tableOverride && !CONFIG.mapping[table]) return;
 
   console.log(`🔄 Uploading: ${table} | Field: ${field}...`);
 
@@ -1731,9 +1733,11 @@ async function handleManualPush(target, table, name) {
             console.log(`      ↻ Updating script: ${scriptDir}`);
             const files = fs.readdirSync(scriptPath);
             for (const file of files) {
-              if (file.startsWith(".")) continue;
+              // Skip hidden files and metadata files (only push actual field files like script.js)
+              if (file.startsWith(".") || file.startsWith("_")) continue;
               const fp = path.join(scriptPath, file);
-              if (fs.lstatSync(fp).isFile()) await pushToServiceNow(fp);
+              // Pass the real SN table name — folder is 'client_scripts' but table is 'catalog_script_client'
+              if (fs.lstatSync(fp).isFile()) await pushToServiceNow(fp, "catalog_script_client");
             }
           } else {
             // Create new script
