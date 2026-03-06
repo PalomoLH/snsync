@@ -190,7 +190,7 @@ async function startBrowserLogin() {
     });
 
     server = app.listen(3000, async () => {
-      const authUrl = `${CONFIG.oauth.authUrl}?response_type=code&client_id=${CONFIG.oauth.clientId}&redirect_uri=${encodeURIComponent(CONFIG.oauth.redirectUri)}`;
+      const authUrl = `${CONFIG.oauth.authUrl}?response_type=code&client_id=${CONFIG.oauth.clientId}&redirect_uri=${CONFIG.oauth.redirectUri}&state=2&scope=openid profile email`;
       console.log(`🚀 Opening browser for login: ${authUrl}`);
       await open(authUrl);
     });

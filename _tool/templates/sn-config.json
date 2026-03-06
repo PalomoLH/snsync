@@ -72,6 +72,20 @@
             },
             "saveContext": true
         },
+        "sysevent_email_action": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": [
+                "name",
+                "subject",
+                "script"
+            ],
+            "ext": {
+                "name": "txt",
+                "subject": "txt",
+                "script": "js"
+            },
+            "saveContext": true
+        },
         "sp_widget": {
             "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
             "fields": [
