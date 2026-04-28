@@ -111,11 +111,13 @@ console.log(`🔌 Connecting to: ${process.env.SN_INSTANCE}`);
 console.log(`📂 Project Folder: ${CURRENT_DIR}`);
 
 // --- AUTH CONFIGURATION (Hybrid: Basic or OAuth Browser) ---
+// Support both SN_USER and SN_USERNAME for backward compatibility
+const SN_USER = process.env.SN_USER || process.env.SN_USERNAME;
 // If CLIENT_ID exists but NO PASSWORD in .env, assume Browser Auth
 const USE_BROWSER_AUTH = process.env.SN_CLIENT_ID && !process.env.SN_PASSWORD;
 const AUTH_MODE = USE_BROWSER_AUTH
   ? "OAUTH_BROWSER"
-  : process.env.SN_USER
+  : SN_USER
     ? "BASIC"
     : "UNKNOWN";
 
@@ -126,7 +128,7 @@ let snUpdateSetSysId = null;
 const CONFIG = {
   url: process.env.SN_INSTANCE,
   basicAuth: {
-    username: process.env.SN_USER,
+    username: SN_USER,
     password: process.env.SN_PASSWORD,
   },
   oauth: {
