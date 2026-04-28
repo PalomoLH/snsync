@@ -1135,8 +1135,8 @@ async function createRecordInServiceNow(
 ) {
   const recordName = path.basename(folderPath);
   const tableDir = path.join(CONFIG.localFolder, table);
-  const expectedParent = path.resolve(tableDir);
-  const actualParent = path.resolve(path.dirname(folderPath));
+  const expectedParent = path.resolve(tableDir).toLowerCase();
+  const actualParent = path.resolve(path.dirname(folderPath)).toLowerCase();
   if (!skipPathValidation && actualParent !== expectedParent) {
     console.error(
       `   ❌ Invalid path: folder must be inside ${table}/ (got ${folderPath})`,
@@ -1700,7 +1700,7 @@ async function handleManualPush(target, table, name) {
         if (fs.existsSync(sysIdPath)) {
           const files = fs.readdirSync(catalogItemFolder);
           for (const file of files) {
-            if (file.startsWith(".")) continue;
+            if (file.startsWith(".") || file.startsWith("_")) continue;
             const fp = path.join(catalogItemFolder, file);
             if (fs.lstatSync(fp).isFile()) await pushToServiceNow(fp);
           }
@@ -1721,7 +1721,7 @@ async function handleManualPush(target, table, name) {
             console.log(`      ↻ Updating variable: ${varDir}`);
             const files = fs.readdirSync(varPath);
             for (const file of files) {
-              if (file.startsWith(".")) continue;
+              if (file.startsWith(".") || file.startsWith("_")) continue;
               const fp = path.join(varPath, file);
               if (fs.lstatSync(fp).isFile()) await pushToServiceNow(fp);
             }
@@ -1840,7 +1840,7 @@ async function handleManualPush(target, table, name) {
         console.log(`   📂 Updating record: ${dirName}`);
         const files = fs.readdirSync(targetPath);
         for (const file of files) {
-          if (file.startsWith(".")) continue;
+          if (file.startsWith(".") || file.startsWith("_")) continue;
           const fp = path.join(targetPath, file);
           if (fs.lstatSync(fp).isFile()) await pushToServiceNow(fp);
         }
@@ -1956,18 +1956,23 @@ async function resolveUpdateSetForRecord(folderPath) {
       const rec = fs.readJsonSync(recordJsonPath);
       const scopeField = rec.sys_scope;
       if (scopeField) {
-        recordScope =
+        // Prefer value (technical scope name) over display_value (human label like "Global")
+        const raw =
           typeof scopeField === "object"
-            ? scopeField.display_value || scopeField.value
+            ? scopeField.value || scopeField.display_value
             : scopeField;
+        if (raw) recordScope = raw.toLowerCase().trim();
       }
     } catch (_) {
       /* ignore parse errors */
     }
   }
 
-  // Look up scope → update set
-  const scopeEntry = scopeConfig[recordScope];
+  // Look up scope → update set (case-insensitive key lookup)
+  const scopeKey = Object.keys(scopeConfig).find(
+    (k) => k.toLowerCase() === recordScope.toLowerCase(),
+  );
+  const scopeEntry = scopeKey ? scopeConfig[scopeKey] : null;
   const usNameOrId =
     scopeEntry?.updateSet ||
     (recordScope === "global" ? scopeConfig["global"]?.updateSet : null);
