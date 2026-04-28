@@ -1,5 +1,12 @@
 {
-    "updateSetSysId": "",
+    "defaultUpdateSet": "",
+    "defaultScope": "global",
+    "scopes": {
+        "global": {
+            "updateSet": "",
+            "updateSetSysId": ""
+        }
+    },
     "mapping": {
         "sys_script_include": {
             "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",

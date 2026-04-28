@@ -229,8 +229,29 @@
                 "reveal": "always",
                 "panel": "shared"
             },
-            "group": "build"
-        }
+            "group": "build"        },
+        {
+            "label": "SN: Create Update Set 🆕📋",
+            "type": "process",
+            "command": "node",
+            "args": [
+                "${workspaceFolder}/snsync",
+                "--create-update-set",
+                "${input:newUpdateSetName}",
+                "--project",
+                "${input:pickProject}",
+                "--scope",
+                "${input:updateSetScope}"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "group": "build"        }
     ],
     "inputs": [
         {
@@ -300,6 +321,17 @@
             "id": "newUser",
             "type": "promptString",
             "description": "Username:"
+        },
+        {
+            "id": "newUpdateSetName",
+            "type": "promptString",
+            "description": "Update Set name (e.g. \"Theme v1.2.0\" or \"My Feature v1.0.0\"):"
+        },
+        {
+            "id": "updateSetScope",
+            "type": "promptString",
+            "description": "Scope (e.g. global, x_my_app — leave empty for global):",
+            "default": "global"
         },
         {
             "id": "newPassword",

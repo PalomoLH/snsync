@@ -14,7 +14,9 @@ const args = process.argv.slice(2);
 const projectIdx = args.indexOf("--project");
 const updateSetIdx = args.indexOf("--update-set");
 const cliUpdateSetSysId =
-  updateSetIdx !== -1 && args[updateSetIdx + 1] && !args[updateSetIdx + 1].startsWith("--")
+  updateSetIdx !== -1 &&
+  args[updateSetIdx + 1] &&
+  !args[updateSetIdx + 1].startsWith("--")
     ? args[updateSetIdx + 1].trim()
     : null;
 if (projectIdx !== -1 && args[projectIdx + 1]) {
@@ -124,6 +126,9 @@ const AUTH_MODE = USE_BROWSER_AUTH
 console.log(`🔐 Authentication Mode: ${AUTH_MODE}`);
 
 let snUpdateSetSysId = null;
+let snDefaultScope = null; // default scope name (e.g. 'global' or 'x_my_app')
+let scopeConfig = {}; // per-scope config from sn-config.json
+const resolvedUpdateSets = {}; // lazy cache: scopeName → sys_id
 
 const CONFIG = {
   url: process.env.SN_INSTANCE,
@@ -293,9 +298,6 @@ snClient.interceptors.request.use(async (reqConfig) => {
   } else if (AUTH_MODE === "BASIC") {
     reqConfig.auth = CONFIG.basicAuth;
   }
-  if (snUpdateSetSysId) {
-    reqConfig.headers["X-UpdateSet"] = snUpdateSetSysId;
-  }
   return reqConfig;
 });
 
@@ -306,6 +308,8 @@ function loadMappingConfig() {
     console.log("⚙️  Loading sn-config.json from project...");
     const loaded = fs.readJsonSync(configPath);
     if (loaded.updateSetSysId) snUpdateSetSysId = loaded.updateSetSysId;
+    if (loaded.defaultScope) snDefaultScope = loaded.defaultScope;
+    if (loaded.scopes) scopeConfig = loaded.scopes;
     return loaded.mapping || loaded;
   }
 
@@ -383,7 +387,12 @@ async function pullCatalogItem(sysId, contextAction = "skip") {
   // Pull linked flow/workflow
   let flowJson = null;
   let flowIsWorkflow = false;
-  const recordJsonPath = path.join(CONFIG.localFolder, "sc_cat_item", catalogItemName, "_record.json");
+  const recordJsonPath = path.join(
+    CONFIG.localFolder,
+    "sc_cat_item",
+    catalogItemName,
+    "_record.json",
+  );
   if (fs.existsSync(recordJsonPath)) {
     const record = fs.readJsonSync(recordJsonPath);
     const flowId = record?.flow_designer_flow?.value;
@@ -400,16 +409,22 @@ async function pullCatalogItem(sysId, contextAction = "skip") {
 
         const xmlResults = xmlRes.data?.result;
         if (!xmlResults || xmlResults.length === 0) {
-          console.warn(`   ⚠️  Flow XML not found in sys_update_xml for flow: ${flowId}`);
+          console.warn(
+            `   ⚠️  Flow XML not found in sys_update_xml for flow: ${flowId}`,
+          );
         } else {
           const flowData = xmlResults[0];
 
           // Use FlowModifier only for XML parsing (no separate axios/token needed)
-          const flowModifier = new FlowModifier(process.env.SN_INSTANCE, "unused");
+          const flowModifier = new FlowModifier(
+            process.env.SN_INSTANCE,
+            "unused",
+          );
 
           // Parse actions directly from the already-fetched XML
           const xml = flowData.payload;
-          const actionPattern = /<sys_hub_action_instance_v2[^>]*>[\s\S]*?<sys_id>(.*?)<\/sys_id>[\s\S]*?<ui_id>(.*?)<\/ui_id>[\s\S]*?<order>(.*?)<\/order>[\s\S]*?<\/sys_hub_action_instance_v2>/g;
+          const actionPattern =
+            /<sys_hub_action_instance_v2[^>]*>[\s\S]*?<sys_id>(.*?)<\/sys_id>[\s\S]*?<ui_id>(.*?)<\/ui_id>[\s\S]*?<order>(.*?)<\/order>[\s\S]*?<\/sys_hub_action_instance_v2>/g;
           const actions = [];
           let m;
           while ((m = actionPattern.exec(xml)) !== null) {
@@ -419,10 +434,20 @@ async function pullCatalogItem(sysId, contextAction = "skip") {
           const decodedActions = {};
           for (const action of actions) {
             try {
-              const { encodedValues } = flowModifier.findActionInXML(flowData.payload, action.sys_id);
-              const config = await flowModifier.decodeActionValues(encodedValues);
-              decodedActions[action.sys_id] = { order: action.order, ui_id: action.ui_id, config };
-            } catch (_) { /* skip undecodable actions */ }
+              const { encodedValues } = flowModifier.findActionInXML(
+                flowData.payload,
+                action.sys_id,
+              );
+              const config =
+                await flowModifier.decodeActionValues(encodedValues);
+              decodedActions[action.sys_id] = {
+                order: action.order,
+                ui_id: action.ui_id,
+                config,
+              };
+            } catch (_) {
+              /* skip undecodable actions */
+            }
           }
 
           flowJson = {
@@ -450,18 +475,23 @@ async function pullCatalogItem(sysId, contextAction = "skip") {
       console.log("🔄 Legacy Workflow (wf_workflow)...");
       try {
         // Fetch the workflow record for metadata
-        const wfRes = await snClient.get(`/api/now/table/wf_workflow/${workflowId}`, {
-          params: {
-            sysparm_fields: "sys_id,name,description,sys_updated_on,sys_updated_by,active",
+        const wfRes = await snClient.get(
+          `/api/now/table/wf_workflow/${workflowId}`,
+          {
+            params: {
+              sysparm_fields:
+                "sys_id,name,description,sys_updated_on,sys_updated_by,active",
+            },
           },
-        });
+        );
         const wfRecord = wfRes.data?.result;
 
         // Fetch activities for this workflow
         const actRes = await snClient.get("/api/now/table/wf_activity", {
           params: {
             sysparm_query: `workflow_version.workflow=${workflowId}^workflow_version.published=true`,
-            sysparm_fields: "sys_id,name,description,order,script,activity_definition",
+            sysparm_fields:
+              "sys_id,name,description,order,script,activity_definition",
             sysparm_orderby: "order",
           },
         });
@@ -485,7 +515,9 @@ async function pullCatalogItem(sysId, contextAction = "skip") {
             active: wfRecord?.active || "",
             last_updated: wfRecord?.sys_updated_on || "",
             updated_by: wfRecord?.sys_updated_by || "",
-            ...(xmlData ? { xml_sys_id: xmlData.sys_id, xml_name: xmlData.name } : {}),
+            ...(xmlData
+              ? { xml_sys_id: xmlData.sys_id, xml_name: xmlData.name }
+              : {}),
           },
           activities: activities.map((a) => ({
             sys_id: a.sys_id,
@@ -497,7 +529,9 @@ async function pullCatalogItem(sysId, contextAction = "skip") {
           })),
         };
         flowIsWorkflow = true;
-        console.log(`   ✅ Workflow retrieved: ${wfRecord?.name || workflowId} (${activities.length} activities)`);
+        console.log(
+          `   ✅ Workflow retrieved: ${wfRecord?.name || workflowId} (${activities.length} activities)`,
+        );
       } catch (err) {
         console.warn(`   ⚠️  Could not pull workflow: ${err.message}`);
       }
@@ -519,7 +553,6 @@ async function pullCatalogItem(sysId, contextAction = "skip") {
     fs.ensureDirSync(path.join(masterFolder, "variables"));
     fs.ensureDirSync(path.join(masterFolder, "client_scripts"));
     if (flowJson) fs.ensureDirSync(path.join(masterFolder, "flow"));
-
 
     // Move catalog item files
     const oldCatalogPath = path.join(srcPath, "sc_cat_item", catalogItemName);
@@ -594,7 +627,9 @@ async function pullCatalogItem(sysId, contextAction = "skip") {
     // Write flow.json or workflow.json
     if (flowJson) {
       const filename = flowIsWorkflow ? "workflow.json" : "flow.json";
-      fs.writeJsonSync(path.join(masterFolder, "flow", filename), flowJson, { spaces: 2 });
+      fs.writeJsonSync(path.join(masterFolder, "flow", filename), flowJson, {
+        spaces: 2,
+      });
     }
 
     console.log(`   ✅ Organized into: ${catalogItemName}/`);
@@ -605,7 +640,9 @@ async function pullCatalogItem(sysId, contextAction = "skip") {
     console.log(`   ├── variables/          (form fields)`);
     if (flowJson) {
       console.log(`   ├── client_scripts/     (form behavior)`);
-      console.log(`   └── flow/               (${flowIsWorkflow ? "legacy workflow" : "flow designer flow"})`);
+      console.log(
+        `   └── flow/               (${flowIsWorkflow ? "legacy workflow" : "flow designer flow"})`,
+      );
     } else {
       console.log(`   └── client_scripts/     (form behavior)`);
     }
@@ -1098,8 +1135,8 @@ async function createRecordInServiceNow(
 ) {
   const recordName = path.basename(folderPath);
   const tableDir = path.join(CONFIG.localFolder, table);
-  const expectedParent = path.resolve(tableDir);
-  const actualParent = path.resolve(path.dirname(folderPath));
+  const expectedParent = path.resolve(tableDir).toLowerCase();
+  const actualParent = path.resolve(path.dirname(folderPath)).toLowerCase();
   if (!skipPathValidation && actualParent !== expectedParent) {
     console.error(
       `   ❌ Invalid path: folder must be inside ${table}/ (got ${folderPath})`,
@@ -1154,6 +1191,20 @@ async function createRecordInServiceNow(
       "   ❌ No data found to create record. (Check json files or field files)",
     );
     return;
+  }
+
+  // Inject update set and default scope into new records
+  const usForCreate = await resolveUpdateSetForRecord(folderPath);
+  if (usForCreate) {
+    payload.sys_update_set = usForCreate;
+    console.log(`   📋 Update Set: ${usForCreate}`);
+  }
+  if (snDefaultScope && snDefaultScope !== "global" && !payload.sys_scope) {
+    const scopeSysId = scopeConfig[snDefaultScope]?.sysId;
+    if (scopeSysId) {
+      payload.sys_scope = scopeSysId;
+      console.log(`   🏷️  Scope: ${snDefaultScope}`);
+    }
   }
 
   // 2. POST (Create)
@@ -1257,7 +1308,9 @@ async function pushFlowJson(flowJsonPath) {
 
   // Get the current XML from ServiceNow
   console.log(`   📥 Fetching current XML for flow: ${meta.flow_id}...`);
-  const xmlRes = await snClient.get(`/api/now/table/sys_update_xml/${meta.sys_id}`);
+  const xmlRes = await snClient.get(
+    `/api/now/table/sys_update_xml/${meta.sys_id}`,
+  );
   const flowData = xmlRes.data?.result;
   if (!flowData || !flowData.payload) {
     console.error("❌ Could not retrieve flow XML from ServiceNow.");
@@ -1270,22 +1323,31 @@ async function pushFlowJson(flowJsonPath) {
 
   for (const [actionSysId, actionData] of Object.entries(actions)) {
     try {
-      const newEncoded = await flowModifier.encodeActionValues(actionData.config);
+      const newEncoded = await flowModifier.encodeActionValues(
+        actionData.config,
+      );
       xml = flowModifier.replaceActionInXML(xml, actionSysId, newEncoded);
       modified++;
     } catch (e) {
-      console.warn(`   ⚠️  Could not encode action ${actionSysId}: ${e.message}`);
+      console.warn(
+        `   ⚠️  Could not encode action ${actionSysId}: ${e.message}`,
+      );
     }
   }
 
-  console.log(`   📝 Re-encoded ${modified}/${Object.keys(actions).length} actions.`);
+  console.log(
+    `   📝 Re-encoded ${modified}/${Object.keys(actions).length} actions.`,
+  );
   console.log(`   ⬆️  Pushing to ServiceNow...`);
   const flowPayload = { payload: xml };
   if (snUpdateSetSysId) {
     flowPayload.update_set = snUpdateSetSysId;
     console.log(`   📋 Targeting Update Set: ${snUpdateSetSysId}`);
   }
-  await snClient.put(`/api/now/table/sys_update_xml/${meta.sys_id}`, flowPayload);
+  await snClient.put(
+    `/api/now/table/sys_update_xml/${meta.sys_id}`,
+    flowPayload,
+  );
   console.log("✅ Flow pushed successfully!");
 }
 
@@ -1372,6 +1434,12 @@ async function pushToServiceNow(filePath, tableOverride = null) {
   const content = fs.readFileSync(filePath, "utf8");
   const payload = {};
   payload[field] = content;
+
+  // Inject update set for existing record push
+  const usForPush = await resolveUpdateSetForRecord(dirPath);
+  if (usForPush) {
+    payload.sys_update_set = usForPush;
+  }
 
   try {
     const putRes = await snClient.put(
@@ -1632,7 +1700,7 @@ async function handleManualPush(target, table, name) {
         if (fs.existsSync(sysIdPath)) {
           const files = fs.readdirSync(catalogItemFolder);
           for (const file of files) {
-            if (file.startsWith(".")) continue;
+            if (file.startsWith(".") || file.startsWith("_")) continue;
             const fp = path.join(catalogItemFolder, file);
             if (fs.lstatSync(fp).isFile()) await pushToServiceNow(fp);
           }
@@ -1653,7 +1721,7 @@ async function handleManualPush(target, table, name) {
             console.log(`      ↻ Updating variable: ${varDir}`);
             const files = fs.readdirSync(varPath);
             for (const file of files) {
-              if (file.startsWith(".")) continue;
+              if (file.startsWith(".") || file.startsWith("_")) continue;
               const fp = path.join(varPath, file);
               if (fs.lstatSync(fp).isFile()) await pushToServiceNow(fp);
             }
@@ -1722,7 +1790,8 @@ async function handleManualPush(target, table, name) {
               if (file.startsWith(".") || file.startsWith("_")) continue;
               const fp = path.join(scriptPath, file);
               // Pass the real SN table name — folder is 'client_scripts' but table is 'catalog_script_client'
-              if (fs.lstatSync(fp).isFile()) await pushToServiceNow(fp, "catalog_script_client");
+              if (fs.lstatSync(fp).isFile())
+                await pushToServiceNow(fp, "catalog_script_client");
             }
           } else {
             // Create new script
@@ -1745,7 +1814,9 @@ async function handleManualPush(target, table, name) {
           console.log(`   🔄 Pushing flow...`);
           await pushFlowJson(flowJsonPath);
         } else if (fs.existsSync(workflowJsonPath)) {
-          console.log(`   ⚠️  workflow.json push not yet supported (legacy engine).`);
+          console.log(
+            `   ⚠️  workflow.json push not yet supported (legacy engine).`,
+          );
         }
       }
 
@@ -1769,7 +1840,7 @@ async function handleManualPush(target, table, name) {
         console.log(`   📂 Updating record: ${dirName}`);
         const files = fs.readdirSync(targetPath);
         for (const file of files) {
-          if (file.startsWith(".")) continue;
+          if (file.startsWith(".") || file.startsWith("_")) continue;
           const fp = path.join(targetPath, file);
           if (fs.lstatSync(fp).isFile()) await pushToServiceNow(fp);
         }
@@ -1841,17 +1912,25 @@ async function resolveUpdateSetSysId(nameOrSysId) {
     const records = res.data.result || [];
     if (records.length === 0) {
       console.error(`❌ No Update Set found matching "${value}".`);
-      console.error("   Make sure the name is correct and the Update Set is 'In Progress'.");
+      console.error(
+        "   Make sure the name is correct and the Update Set is 'In Progress'.",
+      );
       process.exit(1);
     }
     if (records.length === 1) {
-      console.log(`✅ Update Set resolved: "${records[0].name}" (${records[0].sys_id})`);
+      console.log(
+        `✅ Update Set resolved: "${records[0].name}" (${records[0].sys_id})`,
+      );
       return records[0].sys_id;
     }
     // Multiple matches — list them and pick the first exact match, or the first result
     console.log(`⚠️  Multiple Update Sets matched "${value}":`);
-    records.forEach((r, i) => console.log(`   [${i + 1}] ${r.name} (${r.sys_id})`));
-    const exact = records.find((r) => r.name.toLowerCase() === value.toLowerCase());
+    records.forEach((r, i) =>
+      console.log(`   [${i + 1}] ${r.name} (${r.sys_id})`),
+    );
+    const exact = records.find(
+      (r) => r.name.toLowerCase() === value.toLowerCase(),
+    );
     const chosen = exact || records[0];
     console.log(`   → Using: "${chosen.name}" (${chosen.sys_id})`);
     return chosen.sys_id;
@@ -1861,6 +1940,135 @@ async function resolveUpdateSetSysId(nameOrSysId) {
   }
 }
 
+// --- SCOPE-AWARE UPDATE SET RESOLUTION ---
+// Reads _record.json in the given folder to detect sys_scope, then returns
+// the correct update set sys_id for that scope (or the global default).
+async function resolveUpdateSetForRecord(folderPath) {
+  // No scope config? Use the global snUpdateSetSysId
+  if (!scopeConfig || Object.keys(scopeConfig).length === 0)
+    return snUpdateSetSysId;
+
+  // Try to detect the record's scope from _record.json
+  let recordScope = snDefaultScope || "global";
+  const recordJsonPath = path.join(folderPath, "_record.json");
+  if (fs.existsSync(recordJsonPath)) {
+    try {
+      const rec = fs.readJsonSync(recordJsonPath);
+      const scopeField = rec.sys_scope;
+      if (scopeField) {
+        // Prefer value (technical scope name) over display_value (human label like "Global")
+        const raw =
+          typeof scopeField === "object"
+            ? scopeField.value || scopeField.display_value
+            : scopeField;
+        if (raw) recordScope = raw.toLowerCase().trim();
+      }
+    } catch (_) {
+      /* ignore parse errors */
+    }
+  }
+
+  // Look up scope → update set (case-insensitive key lookup)
+  const scopeKey = Object.keys(scopeConfig).find(
+    (k) => k.toLowerCase() === recordScope.toLowerCase(),
+  );
+  const scopeEntry = scopeKey ? scopeConfig[scopeKey] : null;
+  const usNameOrId =
+    scopeEntry?.updateSet ||
+    (recordScope === "global" ? scopeConfig["global"]?.updateSet : null);
+  if (!usNameOrId) return snUpdateSetSysId; // no scope-specific US, use global fallback
+
+  // Resolve lazily (cache results)
+  if (!resolvedUpdateSets[recordScope]) {
+    resolvedUpdateSets[recordScope] = await resolveUpdateSetSysId(usNameOrId);
+  }
+  return resolvedUpdateSets[recordScope];
+}
+
+// --- CREATE UPDATE SET ---
+// Creates a new update set in ServiceNow and saves the result to sn-config.json.
+async function createUpdateSet(name, scopeParam) {
+  const configPath = path.join(CURRENT_DIR, "sn-config.json");
+  const configData = fs.existsSync(configPath)
+    ? fs.readJsonSync(configPath)
+    : { mapping: {} };
+  if (!configData.scopes) configData.scopes = {};
+
+  // Resolve scope sys_id if a scope name was provided
+  let applicationSysId = null;
+  const resolvedScopeName = scopeParam || snDefaultScope || "global";
+
+  if (resolvedScopeName && resolvedScopeName !== "global") {
+    // Check if already known in config
+    const cached = configData.scopes[resolvedScopeName]?.sysId;
+    if (cached) {
+      applicationSysId = cached;
+    } else {
+      // Look up in sys_scope table
+      console.log(`🔍 Resolving scope: "${resolvedScopeName}"...`);
+      try {
+        const scopeRes = await snClient.get("/api/now/table/sys_scope", {
+          params: {
+            sysparm_query: `scope=${resolvedScopeName}`,
+            sysparm_fields: "sys_id,scope,name",
+            sysparm_limit: 1,
+          },
+        });
+        const scopeRecord = scopeRes.data.result?.[0];
+        if (scopeRecord) {
+          applicationSysId = scopeRecord.sys_id;
+          if (!configData.scopes[resolvedScopeName])
+            configData.scopes[resolvedScopeName] = {};
+          configData.scopes[resolvedScopeName].sysId = scopeRecord.sys_id;
+          console.log(
+            `   ✅ Scope resolved: ${scopeRecord.name} (${scopeRecord.sys_id})`,
+          );
+        } else {
+          console.warn(
+            `   ⚠️  Scope "${resolvedScopeName}" not found in ServiceNow. Creating as global.`,
+          );
+        }
+      } catch (e) {
+        console.warn(`   ⚠️  Could not resolve scope: ${e.message}`);
+      }
+    }
+  }
+
+  const payload = { name, state: "in progress" };
+  if (applicationSysId) payload.application = applicationSysId;
+
+  console.log(
+    `📋 Creating Update Set: "${name}" [scope: ${resolvedScopeName}]...`,
+  );
+  const res = await snClient.post("/api/now/table/sys_update_set", payload);
+  const result = res.data.result;
+  if (!result?.sys_id) {
+    console.error("❌ Failed to create Update Set.", res.data);
+    process.exit(1);
+  }
+  console.log(`   ✅ Update Set created! sys_id: ${result.sys_id}`);
+  console.log(`   🔗 ${generateRecordUrl("sys_update_set", result.sys_id)}`);
+
+  // Persist to sn-config.json under scopes
+  if (!configData.scopes[resolvedScopeName])
+    configData.scopes[resolvedScopeName] = {};
+  configData.scopes[resolvedScopeName].updateSet = name;
+  configData.scopes[resolvedScopeName].updateSetSysId = result.sys_id;
+
+  // Also update top-level defaultUpdateSet for quick reference
+  if (resolvedScopeName === "global" || !resolvedScopeName) {
+    configData.defaultUpdateSet = name;
+    snUpdateSetSysId = result.sys_id; // activate immediately
+    resolvedUpdateSets["global"] = result.sys_id;
+  } else {
+    resolvedUpdateSets[resolvedScopeName] = result.sys_id;
+  }
+
+  fs.writeJsonSync(configPath, configData, { spaces: 4 });
+  console.log(`   💾 Saved to sn-config.json [scopes.${resolvedScopeName}]`);
+  return result;
+}
+
 async function main() {
   // Resolve --update-set name → sys_id before any push/pull
   const rawUpdateSet = cliUpdateSetSysId || snUpdateSetSysId;
@@ -1868,153 +2076,193 @@ async function main() {
     snUpdateSetSysId = await resolveUpdateSetSysId(rawUpdateSet);
   }
 
-if (args.includes("--pull")) {
-  const catalogItemId = getArgValue("--catalog-item");
+  if (args.includes("--pull")) {
+    const catalogItemId = getArgValue("--catalog-item");
 
-  if (catalogItemId) {
-    // Catalog Item Mode: Pull everything related to this CI
-    const contextAction = getArgValue("--context-action") || "skip";
-    pullCatalogItem(catalogItemId, contextAction);
-  } else {
-    // Normal Pull Mode
-    let options = {
-      table: getArgValue("--table"),
-      query: getArgValue("--query"),
-      contextAction: getArgValue("--context-action"),
-      contextList: getArgValue("--context-list"),
-    };
+    if (catalogItemId) {
+      // Catalog Item Mode: Pull everything related to this CI
+      const contextAction = getArgValue("--context-action") || "skip";
+      pullCatalogItem(catalogItemId, contextAction);
+    } else {
+      // Normal Pull Mode
+      let options = {
+        table: getArgValue("--table"),
+        query: getArgValue("--query"),
+        contextAction: getArgValue("--context-action"),
+        contextList: getArgValue("--context-list"),
+      };
 
-    // Support --target for Surgical Pull (Update current record)
-    const target = getArgValue("--target");
-    if (target && fs.existsSync(target)) {
-      // Try to discover context (Table + SysId) based on file
-      let searchPath = target;
-      if (fs.lstatSync(searchPath).isFile())
-        searchPath = path.dirname(searchPath); // Get folder if it's a file
+      // Support --target for Surgical Pull (Update current record)
+      const target = getArgValue("--target");
+      if (target && fs.existsSync(target)) {
+        // Try to discover context (Table + SysId) based on file
+        let searchPath = target;
+        if (fs.lstatSync(searchPath).isFile())
+          searchPath = path.dirname(searchPath); // Get folder if it's a file
 
-      const sysIdPath = path.join(searchPath, ".sys_id");
+        const sysIdPath = path.join(searchPath, ".sys_id");
 
-      // If not found in immediate folder, try one level up (if using src/table/record/extra_folder)
-      // But our structure is src/table/record, so searchPath should be the record.
+        // If not found in immediate folder, try one level up (if using src/table/record/extra_folder)
+        // But our structure is src/table/record, so searchPath should be the record.
 
-      if (fs.existsSync(sysIdPath)) {
-        const sysId = fs.readFileSync(sysIdPath, "utf8").trim();
-        // src/table/record -> Get table name (parent of record)
-        const tableDir = path.dirname(searchPath);
+        if (fs.existsSync(sysIdPath)) {
+          const sysId = fs.readFileSync(sysIdPath, "utf8").trim();
+          // src/table/record -> Get table name (parent of record)
+          const tableDir = path.dirname(searchPath);
+          const tableName = path.basename(tableDir);
+
+          console.log(
+            `🎯 Surgical Pull detected: Table [${tableName}] ID [${sysId}]`,
+          );
+          options.table = tableName;
+          options.query = `sys_id=${sysId}`;
+        } else {
+          console.error(
+            "❌ Could not identify .sys_id for this file. Surgical pull impossible.",
+          );
+          process.exit(1);
+        }
+      }
+
+      pullFromServiceNow(options);
+    }
+  } else if (args.includes("--push")) {
+    const target = getArgValue("--push");
+    const table = getArgValue("--table");
+    const name = getArgValue("--name"); // Expects FOLDER name
+    handleManualPush(target, table, name);
+  } else if (args.includes("--open")) {
+    const target = getArgValue("--open");
+    handleOpen(target);
+  } else if (args.includes("--delete")) {
+    const target = getArgValue("--delete"); // Folder path
+    const table = getArgValue("--table");
+    const sysId = getArgValue("--sys_id");
+    const force = args.includes("--force");
+    deleteFromServiceNow(target, table, sysId, force);
+  } else if (args.includes("--watch")) {
+    console.log(`👀 Monitoring: ${CONFIG.localFolder}`);
+    console.log(
+      `   (Edit files and save to push to ServiceNow; new records created on save)`,
+    );
+
+    const watcher = chokidar.watch(CONFIG.localFolder, {
+      persistent: true,
+      ignoreInitial: true,
+    });
+
+    watcher.on("change", (filePath) => {
+      const ext = path.extname(filePath);
+      if (
+        ![".js", ".html", ".css", ".xml", ".scss", ".json", ".txt"].includes(
+          ext,
+        ) ||
+        filePath.includes(".ai_context")
+      )
+        return;
+      const dirPath = path.dirname(filePath);
+      const sysIdPath = path.join(dirPath, ".sys_id");
+      if (!fs.existsSync(sysIdPath)) {
+        const tableDir = path.dirname(dirPath);
         const tableName = path.basename(tableDir);
+        if (CONFIG.mapping[tableName] && CONFIG.mapping[tableName].fields) {
+          createRecordInServiceNow(dirPath, tableName);
+          return;
+        }
+      }
+      pushToServiceNow(filePath);
+    });
+  } else if (args.includes("--modify-flow")) {
+    const flowId = getArgValue("--flow-id");
+    const actionId = getArgValue("--action-id");
+    const operation = getArgValue("--operation") || "list";
+    const param = getArgValue("--param");
+    const value = getArgValue("--value");
 
-        console.log(
-          `🎯 Surgical Pull detected: Table [${tableName}] ID [${sysId}]`,
-        );
-        options.table = tableName;
-        options.query = `sys_id=${sysId}`;
-      } else {
-        console.error(
-          "❌ Could not identify .sys_id for this file. Surgical pull impossible.",
-        );
+    if (!flowId) {
+      console.error("❌ --modify-flow requires --flow-id <sys_id>");
+      process.exit(1);
+    }
+
+    const token = await getValidToken();
+    const flowModifier = new FlowModifier(CONFIG.url, token, snUpdateSetSysId);
+
+    if (operation === "list") {
+      const actions = await flowModifier.listFlowActions(flowId);
+      console.log(`\n📋 Actions in flow ${flowId}:`);
+      actions.forEach((a) =>
+        console.log(`   [${a.order}] ${a.sys_id}  ui_id: ${a.ui_id}`),
+      );
+    } else if (operation === "get") {
+      if (!actionId) {
+        console.error("❌ --operation get requires --action-id");
         process.exit(1);
       }
-    }
-
-    pullFromServiceNow(options);
-  }
-} else if (args.includes("--push")) {
-  const target = getArgValue("--push");
-  const table = getArgValue("--table");
-  const name = getArgValue("--name"); // Expects FOLDER name
-  handleManualPush(target, table, name);
-} else if (args.includes("--open")) {
-  const target = getArgValue("--open");
-  handleOpen(target);
-} else if (args.includes("--delete")) {
-  const target = getArgValue("--delete"); // Folder path
-  const table = getArgValue("--table");
-  const sysId = getArgValue("--sys_id");
-  const force = args.includes("--force");
-  deleteFromServiceNow(target, table, sysId, force);
-} else if (args.includes("--watch")) {
-  console.log(`👀 Monitoring: ${CONFIG.localFolder}`);
-  console.log(
-    `   (Edit files and save to push to ServiceNow; new records created on save)`,
-  );
-
-  const watcher = chokidar.watch(CONFIG.localFolder, {
-    persistent: true,
-    ignoreInitial: true,
-  });
-
-  watcher.on("change", (filePath) => {
-    const ext = path.extname(filePath);
-    if (
-      ![".js", ".html", ".css", ".xml", ".scss", ".json", ".txt"].includes(
-        ext,
-      ) ||
-      filePath.includes(".ai_context")
-    )
-      return;
-    const dirPath = path.dirname(filePath);
-    const sysIdPath = path.join(dirPath, ".sys_id");
-    if (!fs.existsSync(sysIdPath)) {
-      const tableDir = path.dirname(dirPath);
-      const tableName = path.basename(tableDir);
-      if (CONFIG.mapping[tableName] && CONFIG.mapping[tableName].fields) {
-        createRecordInServiceNow(dirPath, tableName);
-        return;
+      const config = await flowModifier.getActionConfig(flowId, actionId);
+      console.log(JSON.stringify(config, null, 2));
+    } else if (operation === "skip-approval") {
+      if (!actionId) {
+        console.error("❌ --operation skip-approval requires --action-id");
+        process.exit(1);
       }
+      await flowModifier.skipApproval(flowId, actionId, { push: true });
+    } else if (operation === "approval") {
+      if (!actionId) {
+        console.error("❌ --operation approval requires --action-id");
+        process.exit(1);
+      }
+      if (value === null) {
+        console.error("❌ --operation approval requires --value");
+        process.exit(1);
+      }
+      await flowModifier.modifyApprovalConditions(flowId, actionId, value, {
+        push: true,
+      });
+    } else if (operation === "modify") {
+      if (!actionId) {
+        console.error("❌ --operation modify requires --action-id");
+        process.exit(1);
+      }
+      if (!param) {
+        console.error("❌ --operation modify requires --param");
+        process.exit(1);
+      }
+      if (value === null) {
+        console.error("❌ --operation modify requires --value");
+        process.exit(1);
+      }
+      // Auto-cast value type
+      let castValue = value;
+      if (value === "true") castValue = true;
+      else if (value === "false") castValue = false;
+      else if (!isNaN(value) && value !== "") castValue = Number(value);
+      await flowModifier.modifyActionParameter(
+        flowId,
+        actionId,
+        param,
+        castValue,
+        { push: true },
+      );
+    } else {
+      console.error(`❌ Unknown operation: ${operation}`);
+      console.error(
+        "   Valid operations: list, get, skip-approval, approval, modify",
+      );
+      process.exit(1);
     }
-    pushToServiceNow(filePath);
-  });
-} else if (args.includes("--modify-flow")) {
-  const flowId = getArgValue("--flow-id");
-  const actionId = getArgValue("--action-id");
-  const operation = getArgValue("--operation") || "list";
-  const param = getArgValue("--param");
-  const value = getArgValue("--value");
-
-  if (!flowId) {
-    console.error("❌ --modify-flow requires --flow-id <sys_id>");
-    process.exit(1);
-  }
-
-  const token = await getValidToken();
-  const flowModifier = new FlowModifier(CONFIG.url, token, snUpdateSetSysId);
-
-  if (operation === "list") {
-    const actions = await flowModifier.listFlowActions(flowId);
-    console.log(`\n📋 Actions in flow ${flowId}:`);
-    actions.forEach((a) =>
-      console.log(`   [${a.order}] ${a.sys_id}  ui_id: ${a.ui_id}`)
-    );
-  } else if (operation === "get") {
-    if (!actionId) { console.error("❌ --operation get requires --action-id"); process.exit(1); }
-    const config = await flowModifier.getActionConfig(flowId, actionId);
-    console.log(JSON.stringify(config, null, 2));
-  } else if (operation === "skip-approval") {
-    if (!actionId) { console.error("❌ --operation skip-approval requires --action-id"); process.exit(1); }
-    await flowModifier.skipApproval(flowId, actionId, { push: true });
-  } else if (operation === "approval") {
-    if (!actionId) { console.error("❌ --operation approval requires --action-id"); process.exit(1); }
-    if (value === null) { console.error("❌ --operation approval requires --value"); process.exit(1); }
-    await flowModifier.modifyApprovalConditions(flowId, actionId, value, { push: true });
-  } else if (operation === "modify") {
-    if (!actionId) { console.error("❌ --operation modify requires --action-id"); process.exit(1); }
-    if (!param) { console.error("❌ --operation modify requires --param"); process.exit(1); }
-    if (value === null) { console.error("❌ --operation modify requires --value"); process.exit(1); }
-    // Auto-cast value type
-    let castValue = value;
-    if (value === "true") castValue = true;
-    else if (value === "false") castValue = false;
-    else if (!isNaN(value) && value !== "") castValue = Number(value);
-    await flowModifier.modifyActionParameter(flowId, actionId, param, castValue, { push: true });
+  } else if (args.includes("--create-update-set")) {
+    const usName = getArgValue("--create-update-set");
+    const scope = getArgValue("--scope");
+    if (!usName) {
+      console.error(
+        '❌ Usage: node snsync --create-update-set "My Feature v1.0.0" [--scope x_my_app]',
+      );
+      process.exit(1);
+    }
+    await createUpdateSet(usName, scope);
   } else {
-    console.error(`❌ Unknown operation: ${operation}`);
-    console.error("   Valid operations: list, get, skip-approval, approval, modify");
-    process.exit(1);
+    console.log("Commands: node snsync --pull | node snsync --watch");
   }
-} else {
-  console.log("Commands: node snsync --pull | node snsync --watch");
-}
-
 } // end main()
 
 main().catch((err) => {
