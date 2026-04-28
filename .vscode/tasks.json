@@ -31,7 +31,9 @@
                 "--push",
                 "${file}",
                 "--project",
-                "${fileDirname}"
+                "${fileDirname}",
+                "--update-set",
+                "${input:updateSetSysId}"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
@@ -113,7 +115,9 @@
                 "--table",
                 "${input:enterTable}",
                 "--name",
-                "${input:enterFolderName}"
+                "${input:enterFolderName}",
+                "--update-set",
+                "${input:updateSetSysId}"
             ],
             "problemMatcher": [],
             "group": "build"
@@ -127,7 +131,9 @@
                 "--push",
                 "--all",
                 "--project",
-                "${input:pickProject}"
+                "${input:pickProject}",
+                "--update-set",
+                "${input:updateSetSysId}"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
@@ -149,7 +155,9 @@
                 "--project",
                 "${input:pickProject}",
                 "--table",
-                "${input:enterTable}"
+                "${input:enterTable}",
+                "--update-set",
+                "${input:updateSetSysId}"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
@@ -225,6 +233,12 @@
         }
     ],
     "inputs": [
+        {
+            "id": "updateSetSysId",
+            "type": "promptString",
+            "description": "Update Set - name (e.g. 'Sprint 42 Changes') or sys_id (leave empty for instance default):",
+            "default": ""
+        },
         {
             "id": "pickProject",
             "type": "promptString",

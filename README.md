@@ -100,6 +100,7 @@ node snsync --pull --catalog-item a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6 --project pro
 - ✅ **Catalog item** (settings, description, execution plan)
 - ✅ **All form variables** (questions with editable parameters)
 - ✅ **All client scripts** (onChange, onSubmit validation)
+- ✅ **Flow Designer flow** (workflow actions - if assigned to catalog item)
 
 **2. The organized structure:**
 
@@ -116,12 +117,14 @@ src/
     │   ├── team_name/
     │   │   └── _record.json    ← Edit variable parameters
     │   └── ...
-    └── client_scripts/
-        ├── On_Change_of_role/
-        │   └── script.js       ← Edit: validation logic
-        ├── popup_on_submit/
-        │   └── script.js       ← Edit: submission behavior
-        └── ...
+    ├── client_scripts/
+    │   ├── On_Change_of_role/
+    │   │   └── script.js       ← Edit: validation logic
+    │   ├── popup_on_submit/
+    │   │   └── script.js       ← Edit: submission behavior
+    │   └── ...
+    └── flow/
+        └── flow.json           ← Edit: workflow approval rules (DECODED!)
 ```
 
 **3. Edit files locally:**
@@ -140,10 +143,77 @@ src/
 **4. Push changes back:**
 
 ```bash
-node snsync --push --project projects/your-project
+node snsync --push --project projects/your-project --update-set "My Update Set"
 ```
 
-✨ **The tool automatically detects which files changed and only pushes those!**
+> 💡 Leave `--update-set` out to use the instance's current active Update Set, or set `updateSetSysId` permanently in `sn-config.json`.
+
+**5. Validate UI-to-script mapping after catalog changes:**
+```bash
+node snsync --validate-catalog-mapping --project projects/your-project
+```
+
+Optional flags:
+- `--catalog Access_request_to_GitHub` (validate one catalog folder)
+- `--catalog-path src` (custom catalog base path)
+- `--strict` (fail if expected catalog folder is missing)
+
+#### 🎯 Editing Flow Designer Workflows
+
+If your catalog item has a flow assigned, it's automatically pulled as `flow/flow.json` with **all actions decoded** and ready to edit!
+
+**Example flow.json structure:**
+```json
+{
+  "_meta": {
+    "sys_id": "66abc0dd87f932105668c88d0ebb359f",
+    "flow_id": "88a75b531b8952107fca32231b4bcb09",
+    "name": "Access request to GitHub",
+    "last_updated": "2025-12-12 14:54:46"
+  },
+  "actions": {
+    "b397fbe08785f210f7a2a60d3fbb359a": {
+      "order": 8,
+      "ui_id": "25fd2f8f-12ba-4c14-9ecd-39bf5e20312a",
+      "config": {
+        "approval_conditions": "ApprovesRejectsAnyG[{{static.d3a933afc383ee1048abf00c0501311b}}]",
+        "additional_approvers": "",
+        "reminder_frequency": 0,
+        "reminder_threshold": 0
+      }
+    }
+  }
+}
+```
+
+**Common flow edits:**
+
+1. **Skip an approval (auto-approve):**
+```json
+"approval_conditions": ""  // Empty = auto-skip
+```
+
+2. **Change approval to a different group:**
+```json
+"approval_conditions": "ApprovesRejectsAnyG[{{static.YOUR_GROUP_SYS_ID}}]"
+```
+
+3. **Change approval to a specific user:**
+```json
+"approval_conditions": "ApprovesRejectsAnyU[{{static.USER_SYS_ID}}]"
+```
+
+4. **Require manager approval:**
+```json
+"approval_conditions": "ApprovesRejectsAnyU[{{triggerref.request_for.manager}}]"
+```
+
+After editing, just push:
+```bash
+node snsync --push projects/your-project/src/Your_Catalog_Item/flow/flow.json --project projects/your-project --update-set "My Update Set"
+```
+
+✨ **The tool automatically re-encodes, validates, and pushes the flow into your Update Set!**
 
 #### 💡 Pro Tips
 
@@ -199,7 +269,7 @@ We recommend using the tasks configured in `.vscode/tasks.json` instead of manua
 
 ### ⬆️ Push (Upload)
 
-- **SN: Push Current File**: Sends the file currently open in the editor.
+- **SN: Push Current File**: Sends the file currently open in the editor. Prompts for an Update Set name (leave blank to use the instance default).
 - **SN: Watch (Monitor)**: Runs in background sending any saved file automatically.
 
 ### 🌎 Utilities
@@ -212,7 +282,18 @@ We recommend using the tasks configured in `.vscode/tasks.json` instead of manua
 
 Each project has its `sn-config.json` defining what to sync.
 
-**Example:**
+**Update Set (optional):**
+
+```json
+{
+    "updateSetSysId": "My Update Set Name",
+    "mapping": { ... }
+}
+```
+
+Set this once to avoid being prompted on every push. Accepts a name (resolved automatically) or a 32-char sys_id. Leave empty to use the instance's current active Update Set.
+
+**Table mapping example:**
 
 ```json
 "sp_widget": {
