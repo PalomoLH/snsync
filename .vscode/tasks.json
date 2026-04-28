@@ -10,7 +10,7 @@
                 "--open",
                 "${file}",
                 "--project",
-                "${fileDirname}" 
+                "${fileDirname}"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
@@ -184,17 +184,45 @@
             "group": "build"
         },
         {
-            "label": "SN: Create New Project 🆕",
+            "label": "SN: Create New Project - Basic Auth 🆕🔐",
             "type": "process",
             "command": "node",
             "args": [
                 "${workspaceFolder}/_tool/create-project.js",
-                "--name", "${input:newProjectName}",
-                "--instance", "${input:newInstanceUrl}",
-                "--clientId", "${input:newClientId}",
-                "--clientSecret", "${input:newClientSecret}",
-                "--user", "${input:newUser}",
-                "--password", "${input:newPassword}"
+                "--name",
+                "${input:newProjectName}",
+                "--instance",
+                "${input:newInstanceUrl}",
+                "--auth-mode",
+                "basic",
+                "--user",
+                "${input:newUser}",
+                "--password",
+                "${input:newPassword}"
+            ],
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "group": "build"
+        },
+        {
+            "label": "SN: Create New Project - OAuth 🆕🔑",
+            "type": "process",
+            "command": "node",
+            "args": [
+                "${workspaceFolder}/_tool/create-project.js",
+                "--name",
+                "${input:newProjectName}",
+                "--instance",
+                "${input:newInstanceUrl}",
+                "--auth-mode",
+                "oauth",
+                "--clientId",
+                "${input:newClientId}",
+                "--clientSecret",
+                "${input:newClientSecret}"
             ],
             "problemMatcher": [],
             "presentation": {
@@ -215,7 +243,11 @@
             "id": "pickProject",
             "type": "promptString",
             "description": "Relative project folder (e.g., projects/my-project):",
-            "default": "projects/<project-folder>"
+            "default": "projects/pdi",
+            "options": [
+                "projects/cnudev",
+                "projects/pdi"
+            ]
         },
         {
             "id": "contextMode",
@@ -257,26 +289,22 @@
         {
             "id": "newClientId",
             "type": "promptString",
-            "description": "Client ID (For Browser Auth):",
-            "default": ""
+            "description": "OAuth Client ID:"
         },
         {
             "id": "newClientSecret",
             "type": "promptString",
-            "description": "Client Secret (For Browser Auth):",
-            "default": ""
+            "description": "OAuth Client Secret:"
         },
         {
             "id": "newUser",
             "type": "promptString",
-            "description": "User (Optional/Basic Auth):",
-            "default": ""
+            "description": "Username:"
         },
         {
             "id": "newPassword",
             "type": "promptString",
-            "description": "Password (Optional/Basic Auth):",
-            "default": ""
+            "description": "Password:"
         }
     ]
 }

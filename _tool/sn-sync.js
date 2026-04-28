@@ -201,7 +201,7 @@ async function startBrowserLogin() {
     });
 
     server = app.listen(3000, async () => {
-      const authUrl = `${CONFIG.oauth.authUrl}?response_type=code&client_id=${CONFIG.oauth.clientId}&redirect_uri=${encodeURIComponent(CONFIG.oauth.redirectUri)}`;
+      const authUrl = `${CONFIG.oauth.authUrl}?response_type=code&client_id=${CONFIG.oauth.clientId}&redirect_uri=${CONFIG.oauth.redirectUri}&state=2&scope=openid profile email`;
       console.log(`🚀 Opening browser for login: ${authUrl}`);
       await open(authUrl);
     });
@@ -704,25 +704,8 @@ async function pullFromServiceNow(options = {}) {
         continue;
       }
 
-      // --- INTERACTIVE: Ask for AI Context (Custom Pull Only) ---
+      // --- AI Context tags prompt disabled (always skip) ---
       let contextTags = [];
-      if (options.query && process.stdout.isTTY && !options.skipContextPrompt) {
-        console.log(
-          `\n   🤖 Custom Pull detected for ${records.length} records.`,
-        );
-        const wantContext = await askQuestion(
-          "      Do you want to add/update AI Context tags for these records? (y/N): ",
-        );
-        if (wantContext.toLowerCase().startsWith("y")) {
-          const tagInput = await askQuestion(
-            '      Enter context tag(s) (comma separated, e.g. "Hackathon,Auth"): ',
-          );
-          contextTags = tagInput
-            .split(",")
-            .map((t) => t.trim())
-            .filter((t) => t);
-        }
-      }
 
       // Helper to get raw value regardless of display_value mode
       const getVal = (r, f) => {
