@@ -234,18 +234,6 @@
             },
             "saveContext": true
         },
-        "sys_ui_policy": {
-            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
-            "fields": [
-                "script_true",
-                "script_false"
-            ],
-            "ext": {
-                "script_true": "true.js",
-                "script_false": "false.js"
-            },
-            "saveContext": true
-        },
         "sys_ws_operation": {
             "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
             "fields": [
@@ -367,18 +355,6 @@
                 "visible_summary",
                 "choices"
             ],
-            "saveContext": true
-        },
-        "wf_workflow": {
-            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
-            "fields": [
-                "description",
-                "condition"
-            ],
-            "ext": {
-                "description": "txt",
-                "condition": "js"
-            },
             "saveContext": true
         },
         "wf_activity": {
@@ -564,10 +540,12 @@
             "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
             "fields": [
                 "name",
-                "description"
+                "description",
+                "condition"
             ],
             "ext": {
-                "description": "txt"
+                "description": "txt",
+                "condition": "js"
             },
             "saveContext": true
         },
@@ -579,8 +557,8 @@
                 "script_false"
             ],
             "ext": {
-                "script_true": "js",
-                "script_false": "js"
+                "script_true": "true.js",
+                "script_false": "false.js"
             },
             "saveContext": true
         },
@@ -608,6 +586,84 @@
                 "message": "log"
             },
             "saveContext": false
+        },
+        "sys_hub_subflow": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": [
+                "description"
+            ],
+            "ext": {
+                "description": "txt"
+            },
+            "saveContext": true
+        },
+        "kb_knowledge": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": [
+                "text",
+                "short_description"
+            ],
+            "ext": {
+                "text": "html",
+                "short_description": "txt"
+            },
+            "saveContext": true
+        },
+        "sys_atf_test": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": [
+                "description"
+            ],
+            "ext": {
+                "description": "txt"
+            },
+            "saveContext": true
+        },
+        "sys_transform_map": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": [
+                "script",
+                "filter_script"
+            ],
+            "ext": {
+                "script": "js",
+                "filter_script": "filter.js"
+            },
+            "saveContext": true
+        },
+        "sys_transform_entry": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": [
+                "script"
+            ],
+            "ext": {
+                "script": "js"
+            },
+            "saveContext": true
+        },
+        "sys_notification": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": [
+                "subject",
+                "message_html",
+                "message_text",
+                "advanced_condition"
+            ],
+            "ext": {
+                "subject": "txt",
+                "message_html": "html",
+                "message_text": "txt",
+                "advanced_condition": "js"
+            },
+            "saveContext": true
+        },
+        "sys_app_application": {
+            "onlyContext": true,
+            "filter": "sys_idISNOTEMPTY"
+        },
+        "sys_update_set": {
+            "onlyContext": true,
+            "filter": "sys_idISNOTEMPTY"
         }
     }
 }
