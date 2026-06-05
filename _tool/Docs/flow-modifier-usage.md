@@ -1,5 +1,51 @@
 # Flow Modifier - Usage Guide
 
+## Pulling Flows Directly (without a Catalog Item)
+
+You can pull any Flow Designer flow by name, scope, or sys_id — without needing a linked catalog item:
+
+```bash
+# Pull all flows in a scope
+node snsync --pull --table sys_hub_flow --query "sys_scope=<scope_sys_id>" --project projects/<project-folder> --context-action skip
+
+# Pull a specific flow by name
+node snsync --pull --table sys_hub_flow --query "nameLIKE<flow_name>^sys_scope=<scope_sys_id>" --project projects/<project-folder> --context-action skip
+```
+
+This automatically downloads a **`flow_map.json`** alongside the record — no catalog item needed.
+
+### `flow_map.json` structure
+
+```json
+{
+  "_meta": {
+    "sys_id": "<flow_sys_id>",
+    "name": "FMatt: Ship Break",
+    "internal_name": "fmatt_ship_break",
+    "type": "flow",
+    "active": "true",
+    "scope": "Cibra",
+    "downloaded_at": "2026-06-05T04:13:07.901Z"
+  },
+  "nodes": [
+    { "type": "trigger", "order": 0, "sys_id": "...", "ui_id": "...", "label": "Trigger - Record Created", "trigger_type": "record_create" },
+    { "type": "action",  "order": 2, "sys_id": "...", "ui_id": "...", "label": "2 - Get Catalog Variables", "action_name": "Get Catalog Variables", "action_type": "..." },
+    { "type": "subflow", "order": 3, "sys_id": "...", "ui_id": "...", "label": "3 - FMatt: Define Gestor",  "subflow_name": "FMatt: Define Gestor do Processo" },
+    { "type": "logic",   "order": 5, "sys_id": "...", "ui_id": "...", "label": "(condition)",              "action_type": "..." }
+  ]
+}
+```
+
+Node types:
+| Type | ServiceNow table | Description |
+|---|---|---|
+| `trigger` | `sys_hub_trigger_instance_v2` | The flow's trigger (record create, scheduled, etc.) |
+| `action` | `sys_hub_action_instance_v2` | Action steps (Create Task, Look Up Records, etc.) |
+| `subflow` | `sys_hub_sub_flow_instance_v2` | Calls to other flows/subflows |
+| `logic` | `sys_hub_flow_logic_instance_v2` | Conditions, loops, For Each, etc. |
+
+---
+
 ## Recommended Workflow: Edit Locally → Push
 
 The simplest and safest way to modify a Flow Designer flow:

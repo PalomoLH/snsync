@@ -259,7 +259,7 @@ async function getValidToken() {
         params.append("client_secret", CONFIG.oauth.clientSecret);
         params.append("refresh_token", tokenData.refresh_token);
 
-        const refreshRes = await axios.post(CONFIG.oauth.tokenUrl, params);
+        const refreshRes = await axios.post(CONFIG.oauth.tokenUrl, params, { timeout: 30000 });
         const newTokenData = refreshRes.data;
         newTokenData.expires_at = Date.now() + newTokenData.expires_in * 1000;
         newTokenData.last_used_at = Date.now(); // Reset timer on refresh too
@@ -322,6 +322,139 @@ function loadMappingConfig() {
 }
 
 // --- FUNCTIONS ---
+
+// --- FLOW DESIGNER: Pull full flow map (triggers, actions, subflows, logic) ---
+async function pullFlowDetails(flowSysId, recordDir) {
+  console.log(`   🔄 Downloading flow map...`);
+  try {
+    const getVal = (v) =>
+      v && typeof v === "object" && "value" in v ? v.value : v;
+    const getDisp = (v) =>
+      v && typeof v === "object"
+        ? v.display_value || v.value || ""
+        : v || "";
+
+    const [flowRes, actRes, sfRes, logicRes, trigRes] = await Promise.all([
+      snClient.get(`/api/now/table/sys_hub_flow/${flowSysId}`, {
+        params: {
+          sysparm_fields:
+            "name,internal_name,label_cache,description,active,type,sys_scope",
+        },
+      }),
+      snClient.get("/api/now/table/sys_hub_action_instance_v2", {
+        params: {
+          sysparm_query: `flow=${flowSysId}`,
+          sysparm_fields: "sys_id,name,order,ui_id,action_name,action_type",
+          sysparm_limit: 200,
+          sysparm_display_value: "true",
+        },
+      }),
+      snClient
+        .get("/api/now/table/sys_hub_sub_flow_instance_v2", {
+          params: {
+            sysparm_query: `flow=${flowSysId}`,
+            sysparm_fields: "sys_id,name,order,ui_id,subflow",
+            sysparm_limit: 50,
+            sysparm_display_value: "true",
+          },
+        })
+        .catch(() => ({ data: { result: [] } })), // table may not exist on all versions
+      snClient
+        .get("/api/now/table/sys_hub_flow_logic_instance_v2", {
+          params: {
+            sysparm_query: `flow=${flowSysId}`,
+            sysparm_fields: "sys_id,name,order,ui_id,action_type",
+            sysparm_limit: 200,
+            sysparm_display_value: "true",
+          },
+        })
+        .catch(() => ({ data: { result: [] } })),
+      snClient
+        .get("/api/now/table/sys_hub_trigger_instance_v2", {
+          params: {
+            sysparm_query: `flow=${flowSysId}`,
+            sysparm_fields:
+              "sys_id,name,order,ui_id,trigger_type,trigger_definition",
+            sysparm_limit: 10,
+            sysparm_display_value: "true",
+          },
+        })
+        .catch(() => ({ data: { result: [] } })),
+    ]);
+
+    const flowRecord = flowRes.data?.result;
+    if (!flowRecord) {
+      console.warn(`   ⚠️  Flow record not found: ${flowSysId}`);
+      return;
+    }
+
+    // Build ui_id → label map from label_cache
+    const labelMap = {};
+    try {
+      JSON.parse(flowRecord.label_cache || "[]").forEach((l) => {
+        const uid = l.name.split(".")[0];
+        if (!labelMap[uid]) labelMap[uid] = l.label.split("➛")[0].trim();
+      });
+    } catch (_) {}
+
+    const mapNode = (r, type, extra) => ({
+      type,
+      order: parseInt(getVal(r.order)) || 0,
+      sys_id: getVal(r.sys_id),
+      ui_id: getVal(r.ui_id),
+      label: labelMap[getVal(r.ui_id)] || getVal(r.name) || "",
+      ...extra(r),
+    });
+
+    const nodes = [
+      ...(trigRes.data?.result || []).map((r) =>
+        mapNode(r, "trigger", (r) => ({
+          trigger_type: getDisp(r.trigger_type),
+        }))
+      ),
+      ...(actRes.data?.result || []).map((r) =>
+        mapNode(r, "action", (r) => ({
+          action_name: getDisp(r.action_name),
+          action_type: getDisp(r.action_type),
+        }))
+      ),
+      ...(sfRes.data?.result || []).map((r) =>
+        mapNode(r, "subflow", (r) => ({
+          subflow_name: getDisp(r.subflow),
+        }))
+      ),
+      ...(logicRes.data?.result || []).map((r) =>
+        mapNode(r, "logic", (r) => ({
+          action_type: getDisp(r.action_type),
+        }))
+      ),
+    ].sort((a, b) => a.order - b.order);
+
+    const counts = ["trigger", "action", "subflow", "logic"]
+      .map((t) => `${nodes.filter((n) => n.type === t).length} ${t}s`)
+      .join(", ");
+
+    const flowMap = {
+      _meta: {
+        sys_id: flowSysId,
+        name: getVal(flowRecord.name),
+        internal_name: getVal(flowRecord.internal_name),
+        type: getVal(flowRecord.type),
+        active: getVal(flowRecord.active),
+        scope: getDisp(flowRecord.sys_scope),
+        downloaded_at: new Date().toISOString(),
+      },
+      nodes,
+    };
+
+    fs.writeJsonSync(path.join(recordDir, "flow_map.json"), flowMap, {
+      spaces: 2,
+    });
+    console.log(`   ✅ Flow map: ${nodes.length} nodes (${counts})`);
+  } catch (err) {
+    console.warn(`   ⚠️  Could not download flow map: ${err.message}`);
+  }
+}
 
 async function pullCatalogItem(sysId, contextAction = "skip") {
   console.log("📦 Pulling complete catalog item...");
@@ -630,6 +763,14 @@ async function pullCatalogItem(sysId, contextAction = "skip") {
       fs.writeJsonSync(path.join(masterFolder, "flow", filename), flowJson, {
         spaces: 2,
       });
+
+      // Also download the human-readable flow map
+      if (!flowIsWorkflow && flowJson._meta?.flow_id) {
+        await pullFlowDetails(
+          flowJson._meta.flow_id,
+          path.join(masterFolder, "flow"),
+        );
+      }
     }
 
     console.log(`   ✅ Organized into: ${catalogItemName}/`);
@@ -848,6 +989,11 @@ async function pullFromServiceNow(options = {}) {
             fs.writeFileSync(contextFile, currentContent);
             console.log(`      🧠 Added context tags to ${safeName}`);
           }
+        }
+
+        // Special: for sys_hub_flow, also download full flow structure map
+        if (table === "sys_hub_flow") {
+          await pullFlowDetails(sysId, recordDir);
         }
       }
       console.log(
