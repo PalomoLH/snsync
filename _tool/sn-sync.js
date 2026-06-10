@@ -866,6 +866,9 @@ async function pullFromServiceNow(options = {}) {
     ];
     if (hasJsonFields) fetchFields.push(...jsonExportFields);
     if (config.contextKeys) fetchFields.push(...config.contextKeys); // Future proofing
+    if (config.variableFields && config.variableFields.length > 0) {
+      fetchFields.push("definition", "workflow_version");
+    }
 
     fetchFields = [...new Set(fetchFields)]; // Unique
 
@@ -941,6 +944,59 @@ async function pullFromServiceNow(options = {}) {
               fs.outputFileSync(filePath, val);
             }
           });
+        }
+
+        // --- FEATURE: Variable Field Resolution (e.g. wf_activity "Run Script") ---
+        // Some activity types store field values in sys_variable_value instead of directly
+        // on the record. We detect the pattern vars.var__m_<definition_sys_id>.<field>
+        // and replace the file content with the real value from sys_variable_value.
+        if (config.variableFields && config.variableFields.length > 0) {
+          const wfMeta = {
+            workflow_version: getVal(rec, "workflow_version") || null,
+            definition: getVal(rec, "definition") || null,
+            variable_values: {},
+          };
+          let hasVarFields = false;
+
+          for (const vField of config.variableFields) {
+            const rawVal = getVal(rec, vField);
+            if (rawVal && /^vars\.var__m_[a-f0-9]+\./.test(rawVal)) {
+              hasVarFields = true;
+              // Extract the variable name from the reference: vars.var__m_<def>.{varName}
+              const refMatch = rawVal.match(/^vars\.var__m_[a-f0-9]+\.(\w+)/);
+              const variableName = refMatch ? refMatch[1] : vField;
+              try {
+                const varRes = await snClient.get(
+                  `/api/now/table/sys_variable_value?sysparm_query=table%3Dwf_activity%5Edocument_key%3D${sysId}%5Evariable.name%3D${encodeURIComponent(variableName)}&sysparm_fields=sys_id%2Cvalue&sysparm_limit=1`,
+                );
+                const varRecs = varRes.data.result;
+                if (varRecs && varRecs.length > 0) {
+                  wfMeta.variable_values[vField] = {
+                    sys_id: varRecs[0].sys_id,
+                    variable_name: variableName,
+                  };
+                  const ext = (config.ext && config.ext[vField]) || "txt";
+                  fs.outputFileSync(
+                    path.join(recordDir, `${vField}.${ext}`),
+                    varRecs[0].value || "",
+                  );
+                }
+              } catch (e) {
+                console.warn(
+                  `      ⚠️ Could not resolve variable value for field '${vField}' on activity ${sysId}`,
+                );
+              }
+            }
+          }
+
+          if (hasVarFields) {
+            fs.writeJsonSync(
+              path.join(recordDir, ".wf_meta.json"),
+              wfMeta,
+              { spaces: 2 },
+            );
+            console.log(`      🔗 Resolved variable fields for ${safeName}`);
+          }
         }
 
         // --- FEATURE: Extra JSON Metadata ---
@@ -1497,6 +1553,24 @@ async function pushFlowJson(flowJsonPath) {
   console.log("✅ Flow pushed successfully!");
 }
 
+async function checkWorkflowVersionEditable(versionSysId) {
+  try {
+    const res = await snClient.get(
+      `/api/now/table/wf_workflow_version/${versionSysId}?sysparm_fields=published,workflow`,
+    );
+    const ver = res.data.result;
+    const published = ver.published === "true" || ver.published === true;
+    const workflowSysId =
+      ver.workflow && typeof ver.workflow === "object"
+        ? ver.workflow.value
+        : ver.workflow;
+    return { editable: !published, workflowSysId };
+  } catch (e) {
+    console.warn("   ⚠️ Could not check workflow version state. Proceeding.");
+    return { editable: true, workflowSysId: null };
+  }
+}
+
 async function pushToServiceNow(filePath, tableOverride = null) {
   const fileName = path.basename(filePath);
 
@@ -1545,6 +1619,8 @@ async function pushToServiceNow(filePath, tableOverride = null) {
   // Security validation: skip mapping check when table is explicitly overridden
   if (!tableOverride && !CONFIG.mapping[table]) return;
 
+  const tableConfig = CONFIG.mapping[table] || {};
+
   console.log(`🔄 Uploading: ${table} | Field: ${field}...`);
 
   // --- OVERWRITE PROTECTION (COLLISION CHECK) ---
@@ -1574,6 +1650,55 @@ async function pushToServiceNow(filePath, tableOverride = null) {
       console.warn(
         `   ⚠️ Could not check conflicts on server. Proceeding at your own risk...`,
       );
+    }
+  }
+
+  // --- FEATURE: Variable Field Push (wf_activity via sys_variable_value) ---
+  // When a field is stored in sys_variable_value instead of directly on the record,
+  // we route the push there instead of doing a normal PUT on the parent table.
+  const wfMetaPath = path.join(dirPath, ".wf_meta.json");
+  if (fs.existsSync(wfMetaPath) && tableConfig.variableFields) {
+    let wfMeta;
+    try {
+      wfMeta = fs.readJsonSync(wfMetaPath);
+    } catch (e) {
+      wfMeta = {};
+    }
+    if (wfMeta.variable_values && wfMeta.variable_values[field]) {
+      const varSysId = wfMeta.variable_values[field].sys_id;
+
+      if (tableConfig.workflowCheckout && wfMeta.workflow_version) {
+        const { editable, workflowSysId } = await checkWorkflowVersionEditable(
+          wfMeta.workflow_version,
+        );
+        if (!editable) {
+          console.error(`\n🛑 BLOCKED: Workflow version is published (read-only).`);
+          console.error(`   Check out the workflow in ServiceNow before editing.`);
+          if (workflowSysId) {
+            console.error(`   🔗 ${generateRecordUrl("wf_workflow", workflowSysId)}`);
+          }
+          console.error(
+            `   After checkout, re-run --pull to refresh .wf_meta.json with the new version.`,
+          );
+          return;
+        }
+      }
+
+      const content = fs.readFileSync(filePath, "utf8");
+      try {
+        await snClient.put(`/api/now/table/sys_variable_value/${varSysId}`, {
+          value: content,
+        });
+        const recordUrl = generateRecordUrl(table, sysId);
+        console.log(`   ✨ Success! Variable value updated in ServiceNow.`);
+        console.log(`      🔗 ${recordUrl}`);
+      } catch (error) {
+        console.error(
+          `   🔥 Error:`,
+          error.response?.data?.error?.message || error.message,
+        );
+      }
+      return;
     }
   }
 
