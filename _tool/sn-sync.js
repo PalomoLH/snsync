@@ -259,7 +259,7 @@ async function getValidToken() {
         params.append("client_secret", CONFIG.oauth.clientSecret);
         params.append("refresh_token", tokenData.refresh_token);
 
-        const refreshRes = await axios.post(CONFIG.oauth.tokenUrl, params);
+        const refreshRes = await axios.post(CONFIG.oauth.tokenUrl, params, { timeout: 30000 });
         const newTokenData = refreshRes.data;
         newTokenData.expires_at = Date.now() + newTokenData.expires_in * 1000;
         newTokenData.last_used_at = Date.now(); // Reset timer on refresh too
@@ -322,6 +322,139 @@ function loadMappingConfig() {
 }
 
 // --- FUNCTIONS ---
+
+// --- FLOW DESIGNER: Pull full flow map (triggers, actions, subflows, logic) ---
+async function pullFlowDetails(flowSysId, recordDir) {
+  console.log(`   🔄 Downloading flow map...`);
+  try {
+    const getVal = (v) =>
+      v && typeof v === "object" && "value" in v ? v.value : v;
+    const getDisp = (v) =>
+      v && typeof v === "object"
+        ? v.display_value || v.value || ""
+        : v || "";
+
+    const [flowRes, actRes, sfRes, logicRes, trigRes] = await Promise.all([
+      snClient.get(`/api/now/table/sys_hub_flow/${flowSysId}`, {
+        params: {
+          sysparm_fields:
+            "name,internal_name,label_cache,description,active,type,sys_scope",
+        },
+      }),
+      snClient.get("/api/now/table/sys_hub_action_instance_v2", {
+        params: {
+          sysparm_query: `flow=${flowSysId}`,
+          sysparm_fields: "sys_id,name,order,ui_id,action_name,action_type",
+          sysparm_limit: 200,
+          sysparm_display_value: "true",
+        },
+      }),
+      snClient
+        .get("/api/now/table/sys_hub_sub_flow_instance_v2", {
+          params: {
+            sysparm_query: `flow=${flowSysId}`,
+            sysparm_fields: "sys_id,name,order,ui_id,subflow",
+            sysparm_limit: 50,
+            sysparm_display_value: "true",
+          },
+        })
+        .catch(() => ({ data: { result: [] } })), // table may not exist on all versions
+      snClient
+        .get("/api/now/table/sys_hub_flow_logic_instance_v2", {
+          params: {
+            sysparm_query: `flow=${flowSysId}`,
+            sysparm_fields: "sys_id,name,order,ui_id,action_type",
+            sysparm_limit: 200,
+            sysparm_display_value: "true",
+          },
+        })
+        .catch(() => ({ data: { result: [] } })),
+      snClient
+        .get("/api/now/table/sys_hub_trigger_instance_v2", {
+          params: {
+            sysparm_query: `flow=${flowSysId}`,
+            sysparm_fields:
+              "sys_id,name,order,ui_id,trigger_type,trigger_definition",
+            sysparm_limit: 10,
+            sysparm_display_value: "true",
+          },
+        })
+        .catch(() => ({ data: { result: [] } })),
+    ]);
+
+    const flowRecord = flowRes.data?.result;
+    if (!flowRecord) {
+      console.warn(`   ⚠️  Flow record not found: ${flowSysId}`);
+      return;
+    }
+
+    // Build ui_id → label map from label_cache
+    const labelMap = {};
+    try {
+      JSON.parse(flowRecord.label_cache || "[]").forEach((l) => {
+        const uid = l.name.split(".")[0];
+        if (!labelMap[uid]) labelMap[uid] = l.label.split("➛")[0].trim();
+      });
+    } catch (_) {}
+
+    const mapNode = (r, type, extra) => ({
+      type,
+      order: parseInt(getVal(r.order)) || 0,
+      sys_id: getVal(r.sys_id),
+      ui_id: getVal(r.ui_id),
+      label: labelMap[getVal(r.ui_id)] || getVal(r.name) || "",
+      ...extra(r),
+    });
+
+    const nodes = [
+      ...(trigRes.data?.result || []).map((r) =>
+        mapNode(r, "trigger", (r) => ({
+          trigger_type: getDisp(r.trigger_type),
+        }))
+      ),
+      ...(actRes.data?.result || []).map((r) =>
+        mapNode(r, "action", (r) => ({
+          action_name: getDisp(r.action_name),
+          action_type: getDisp(r.action_type),
+        }))
+      ),
+      ...(sfRes.data?.result || []).map((r) =>
+        mapNode(r, "subflow", (r) => ({
+          subflow_name: getDisp(r.subflow),
+        }))
+      ),
+      ...(logicRes.data?.result || []).map((r) =>
+        mapNode(r, "logic", (r) => ({
+          action_type: getDisp(r.action_type),
+        }))
+      ),
+    ].sort((a, b) => a.order - b.order);
+
+    const counts = ["trigger", "action", "subflow", "logic"]
+      .map((t) => `${nodes.filter((n) => n.type === t).length} ${t}s`)
+      .join(", ");
+
+    const flowMap = {
+      _meta: {
+        sys_id: flowSysId,
+        name: getVal(flowRecord.name),
+        internal_name: getVal(flowRecord.internal_name),
+        type: getVal(flowRecord.type),
+        active: getVal(flowRecord.active),
+        scope: getDisp(flowRecord.sys_scope),
+        downloaded_at: new Date().toISOString(),
+      },
+      nodes,
+    };
+
+    fs.writeJsonSync(path.join(recordDir, "flow_map.json"), flowMap, {
+      spaces: 2,
+    });
+    console.log(`   ✅ Flow map: ${nodes.length} nodes (${counts})`);
+  } catch (err) {
+    console.warn(`   ⚠️  Could not download flow map: ${err.message}`);
+  }
+}
 
 async function pullCatalogItem(sysId, contextAction = "skip") {
   console.log("📦 Pulling complete catalog item...");
@@ -630,6 +763,14 @@ async function pullCatalogItem(sysId, contextAction = "skip") {
       fs.writeJsonSync(path.join(masterFolder, "flow", filename), flowJson, {
         spaces: 2,
       });
+
+      // Also download the human-readable flow map
+      if (!flowIsWorkflow && flowJson._meta?.flow_id) {
+        await pullFlowDetails(
+          flowJson._meta.flow_id,
+          path.join(masterFolder, "flow"),
+        );
+      }
     }
 
     console.log(`   ✅ Organized into: ${catalogItemName}/`);
@@ -725,6 +866,9 @@ async function pullFromServiceNow(options = {}) {
     ];
     if (hasJsonFields) fetchFields.push(...jsonExportFields);
     if (config.contextKeys) fetchFields.push(...config.contextKeys); // Future proofing
+    if (config.variableFields && config.variableFields.length > 0) {
+      fetchFields.push("definition", "workflow_version");
+    }
 
     fetchFields = [...new Set(fetchFields)]; // Unique
 
@@ -802,6 +946,59 @@ async function pullFromServiceNow(options = {}) {
           });
         }
 
+        // --- FEATURE: Variable Field Resolution (e.g. wf_activity "Run Script") ---
+        // Some activity types store field values in sys_variable_value instead of directly
+        // on the record. We detect the pattern vars.var__m_<definition_sys_id>.<field>
+        // and replace the file content with the real value from sys_variable_value.
+        if (config.variableFields && config.variableFields.length > 0) {
+          const wfMeta = {
+            workflow_version: getVal(rec, "workflow_version") || null,
+            definition: getVal(rec, "definition") || null,
+            variable_values: {},
+          };
+          let hasVarFields = false;
+
+          for (const vField of config.variableFields) {
+            const rawVal = getVal(rec, vField);
+            if (rawVal && /^vars\.var__m_[a-f0-9]+\./.test(rawVal)) {
+              hasVarFields = true;
+              // Extract the variable name from the reference: vars.var__m_<def>.{varName}
+              const refMatch = rawVal.match(/^vars\.var__m_[a-f0-9]+\.(\w+)/);
+              const variableName = refMatch ? refMatch[1] : vField;
+              try {
+                const varRes = await snClient.get(
+                  `/api/now/table/sys_variable_value?sysparm_query=table%3Dwf_activity%5Edocument_key%3D${sysId}%5Evariable.name%3D${encodeURIComponent(variableName)}&sysparm_fields=sys_id%2Cvalue&sysparm_limit=1`,
+                );
+                const varRecs = varRes.data.result;
+                if (varRecs && varRecs.length > 0) {
+                  wfMeta.variable_values[vField] = {
+                    sys_id: varRecs[0].sys_id,
+                    variable_name: variableName,
+                  };
+                  const ext = (config.ext && config.ext[vField]) || "txt";
+                  fs.outputFileSync(
+                    path.join(recordDir, `${vField}.${ext}`),
+                    varRecs[0].value || "",
+                  );
+                }
+              } catch (e) {
+                console.warn(
+                  `      ⚠️ Could not resolve variable value for field '${vField}' on activity ${sysId}`,
+                );
+              }
+            }
+          }
+
+          if (hasVarFields) {
+            fs.writeJsonSync(
+              path.join(recordDir, ".wf_meta.json"),
+              wfMeta,
+              { spaces: 2 },
+            );
+            console.log(`      🔗 Resolved variable fields for ${safeName}`);
+          }
+        }
+
         // --- FEATURE: Extra JSON Metadata ---
         if (hasJsonFields) {
           const jsonContent = {};
@@ -848,6 +1045,11 @@ async function pullFromServiceNow(options = {}) {
             fs.writeFileSync(contextFile, currentContent);
             console.log(`      🧠 Added context tags to ${safeName}`);
           }
+        }
+
+        // Special: for sys_hub_flow, also download full flow structure map
+        if (table === "sys_hub_flow") {
+          await pullFlowDetails(sysId, recordDir);
         }
       }
       console.log(
@@ -1351,6 +1553,24 @@ async function pushFlowJson(flowJsonPath) {
   console.log("✅ Flow pushed successfully!");
 }
 
+async function checkWorkflowVersionEditable(versionSysId) {
+  try {
+    const res = await snClient.get(
+      `/api/now/table/wf_workflow_version/${versionSysId}?sysparm_fields=published,workflow`,
+    );
+    const ver = res.data.result;
+    const published = ver.published === "true" || ver.published === true;
+    const workflowSysId =
+      ver.workflow && typeof ver.workflow === "object"
+        ? ver.workflow.value
+        : ver.workflow;
+    return { editable: !published, workflowSysId };
+  } catch (e) {
+    console.warn("   ⚠️ Could not check workflow version state. Proceeding.");
+    return { editable: true, workflowSysId: null };
+  }
+}
+
 async function pushToServiceNow(filePath, tableOverride = null) {
   const fileName = path.basename(filePath);
 
@@ -1399,6 +1619,8 @@ async function pushToServiceNow(filePath, tableOverride = null) {
   // Security validation: skip mapping check when table is explicitly overridden
   if (!tableOverride && !CONFIG.mapping[table]) return;
 
+  const tableConfig = CONFIG.mapping[table] || {};
+
   console.log(`🔄 Uploading: ${table} | Field: ${field}...`);
 
   // --- OVERWRITE PROTECTION (COLLISION CHECK) ---
@@ -1428,6 +1650,55 @@ async function pushToServiceNow(filePath, tableOverride = null) {
       console.warn(
         `   ⚠️ Could not check conflicts on server. Proceeding at your own risk...`,
       );
+    }
+  }
+
+  // --- FEATURE: Variable Field Push (wf_activity via sys_variable_value) ---
+  // When a field is stored in sys_variable_value instead of directly on the record,
+  // we route the push there instead of doing a normal PUT on the parent table.
+  const wfMetaPath = path.join(dirPath, ".wf_meta.json");
+  if (fs.existsSync(wfMetaPath) && tableConfig.variableFields) {
+    let wfMeta;
+    try {
+      wfMeta = fs.readJsonSync(wfMetaPath);
+    } catch (e) {
+      wfMeta = {};
+    }
+    if (wfMeta.variable_values && wfMeta.variable_values[field]) {
+      const varSysId = wfMeta.variable_values[field].sys_id;
+
+      if (tableConfig.workflowCheckout && wfMeta.workflow_version) {
+        const { editable, workflowSysId } = await checkWorkflowVersionEditable(
+          wfMeta.workflow_version,
+        );
+        if (!editable) {
+          console.error(`\n🛑 BLOCKED: Workflow version is published (read-only).`);
+          console.error(`   Check out the workflow in ServiceNow before editing.`);
+          if (workflowSysId) {
+            console.error(`   🔗 ${generateRecordUrl("wf_workflow", workflowSysId)}`);
+          }
+          console.error(
+            `   After checkout, re-run --pull to refresh .wf_meta.json with the new version.`,
+          );
+          return;
+        }
+      }
+
+      const content = fs.readFileSync(filePath, "utf8");
+      try {
+        await snClient.put(`/api/now/table/sys_variable_value/${varSysId}`, {
+          value: content,
+        });
+        const recordUrl = generateRecordUrl(table, sysId);
+        console.log(`   ✨ Success! Variable value updated in ServiceNow.`);
+        console.log(`      🔗 ${recordUrl}`);
+      } catch (error) {
+        console.error(
+          `   🔥 Error:`,
+          error.response?.data?.error?.message || error.message,
+        );
+      }
+      return;
     }
   }
 

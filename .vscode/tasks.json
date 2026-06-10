@@ -229,7 +229,8 @@
                 "reveal": "always",
                 "panel": "shared"
             },
-            "group": "build"        },
+            "group": "build"
+        },
         {
             "label": "SN: Create Update Set 🆕📋",
             "type": "process",
@@ -251,7 +252,8 @@
                 "reveal": "always",
                 "panel": "shared"
             },
-            "group": "build"        }
+            "group": "build"
+        }
     ],
     "inputs": [
         {
@@ -264,10 +266,10 @@
             "id": "pickProject",
             "type": "promptString",
             "description": "Relative project folder (e.g., projects/my-project):",
-            "default": "projects/pdi",
+            "default": "projects/cibradev",
             "options": [
-                "projects/cnudev",
-                "projects/pdi"
+                "projects/cibradev",
+                "projects/rdsldev"
             ]
         },
         {

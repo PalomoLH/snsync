@@ -362,28 +362,29 @@ class FlowModifier {
     }
 
     /**
-     * List all actions in a flow
+     * List all actions in a flow via table API (faster than XML parsing)
      */
     async listFlowActions(flowId) {
-        const flowData = await this.getFlowXML(flowId);
-        const xml = flowData.payload;
-        
-        // Extract all action instances
-        const actionPattern = /<sys_hub_action_instance_v2[^>]*>[\s\S]*?<sys_id>(.*?)<\/sys_id>[\s\S]*?<ui_id>(.*?)<\/ui_id>[\s\S]*?<order>(.*?)<\/order>[\s\S]*?<action[^>]*>(.*?)<\/action>[\s\S]*?<\/sys_hub_action_instance_v2>/g;
-        
-        const actions = [];
-        let match;
-        while ((match = actionPattern.exec(xml)) !== null) {
-            actions.push({
-                sys_id: match[1],
-                ui_id: match[2],
-                order: parseInt(match[3]),
-                action_ref: match[4]
-            });
-        }
-        
-        actions.sort((a, b) => a.order - b.order);
-        return actions;
+        const response = await this.api.get('/table/sys_hub_action_instance_v2', {
+            params: {
+                sysparm_query: `flow=${flowId}`,
+                sysparm_fields: 'sys_id,ui_id,order,name,action_name',
+                sysparm_orderby: 'order',
+                sysparm_limit: 200,
+                sysparm_display_value: 'true',
+            }
+        });
+
+        const getVal = (v) => v && typeof v === 'object' ? (v.value || '') : (v || '');
+        const getDisp = (v) => v && typeof v === 'object' ? (v.display_value || v.value || '') : (v || '');
+
+        return (response.data?.result || []).map(r => ({
+            sys_id: getVal(r.sys_id),
+            ui_id: getVal(r.ui_id),
+            order: parseInt(getVal(r.order)) || 0,
+            name: getVal(r.name),
+            action_name: getDisp(r.action_name),
+        })).sort((a, b) => a.order - b.order);
     }
 }
 

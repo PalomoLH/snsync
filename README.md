@@ -14,6 +14,7 @@ Agile local development CLI and VS Code integration for the ServiceNow platform.
 - **Context Aware**: Each record gets its own folder with separate scripts (`server.js`, `client.js`, `template.html`).
 - **🤖 AI-Ready**: Generates `_ai_context.md` with tags and `_record.json` with metadata to help AI agents understand your ServiceNow instance.
 - **Creation & Bulk Push**: Create new records by just making a folder and pushing it.
+- **⚙️ Legacy Workflow Variable Fields**: For `wf_activity` "Run Script" activities, automatically resolves hidden variable values from `sys_variable_value` — your `script.js` gets the real code, not a `vars.var__m_*` reference. Push-time checkout guard prevents accidental edits to published workflow versions.
 - **🤖 AI Documentation**: Includes detailed instructions for AI agents (`.github/copilot-instructions.md`, `AI_GUIDE.md`).
 
 ---
@@ -339,7 +340,7 @@ The tool supports synchronization for the following ServiceNow tables:
 **Workflows:**
 
 - `wf_workflow` - Workflow Definitions
-- `wf_activity` - Workflow Activities
+- `wf_activity` - Workflow Activities (with variable field resolution — see below)
 - `sys_hub_flow` - Flow Designer Flows
 - `sys_hub_action_type_definition` - Flow Designer Actions
 
@@ -360,6 +361,69 @@ The tool supports synchronization for the following ServiceNow tables:
 
 - `sys_ws_operation` - Web Service Operations
 - `sys_rest_message_fn` - REST Message Functions
+
+---
+
+## ⚙️ Working with Legacy Workflow Activities (wf_activity)
+
+The classic ServiceNow Workflow Editor stores some activity field values **indirectly** via the `sys_variable_value` table instead of directly on the `wf_activity` record. This happens for activity types like **Run Script** (`definition = db8c65aec0a8016501d00259bc7203a4`), where `wf_activity.script` holds only a variable reference (`vars.var__m_<definition_sys_id>.script`) instead of the actual code.
+
+SNSync resolves this transparently on pull and routes the update correctly on push.
+
+### How it works
+
+**Pull:**
+1. SNSync detects any field value matching the pattern `vars.var__m_<sys_id>.<name>`.
+2. It queries `sys_variable_value` (filtered by `table=wf_activity`, `document_key=<activity_sys_id>`, `variable.name=<name>`) to get the real value.
+3. Your local `script.js` contains the **actual script**, not the reference.
+4. A hidden `.wf_meta.json` file is saved in the activity folder with the `sys_variable_value.sys_id` and the `workflow_version` — this is used by the push.
+
+**Push:**
+1. If `.wf_meta.json` exists and the field is registered as a variable value, the push goes to `sys_variable_value/<var_sys_id>` instead of `wf_activity/<activity_sys_id>`.
+2. Before writing, SNSync checks if the `wf_workflow_version` is **published (read-only)**. If so, it blocks the push and shows the URL to check out the workflow manually.
+
+### Enabling it in sn-config.json
+
+```json
+"wf_activity": {
+    "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+    "fields": ["script", "on_cancel", "result_condition"],
+    "ext": { "script": "js", "on_cancel": "js", "result_condition": "js" },
+    "variableFields": ["script", "on_cancel", "result_condition"],
+    "workflowCheckout": true,
+    "saveContext": true
+}
+```
+
+- **`variableFields`**: Fields to inspect for the `vars.var__m_*` pattern. Only fields that actually use the mechanism are resolved; others pass through normally.
+- **`workflowCheckout`**: When `true`, blocks push if the workflow version is published and shows the checkout URL.
+
+### Editing a Run Script activity — step by step
+
+```bash
+# 1. Pull the workflow activities
+node _tool/sn-sync.js --pull --table wf_activity --project projects/myproject
+
+# 2. Open and edit the real script
+#    src/wf_activity/My_Script_Activity/script.js  ← actual code here
+#    src/wf_activity/My_Script_Activity/.wf_meta.json  ← do not edit
+
+# 3. Push — the tool updates sys_variable_value, not wf_activity directly
+node _tool/sn-sync.js --push src/wf_activity/My_Script_Activity/script.js --project projects/myproject
+```
+
+### Checkout guard
+
+If the workflow version is published, the push is blocked:
+
+```
+🛑 BLOCKED: Workflow version is published (read-only).
+   Check out the workflow in ServiceNow before editing.
+   🔗 https://yourinstance.service-now.com/now/nav/ui/classic/params/target/wf_workflow.do?sys_id=...
+   After checkout, re-run --pull to refresh .wf_meta.json with the new version.
+```
+
+Open the link, click **Check Out** in the ServiceNow Workflow Editor, then re-run `--pull` and retry the push. The `.wf_meta.json` will be updated with the new checked-out version's data automatically.
 
 ---
 
