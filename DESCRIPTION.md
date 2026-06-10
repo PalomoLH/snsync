@@ -41,6 +41,33 @@ Unlike traditional extensions or XMLs, SNSync focuses on **Context**, **Security
 4.  **Code!**:
     Use `Cmd+Shift+P` -> `Run Task` to access **Pull**, **Push**, **Watch**, and **Open** commands.
 
+## 🔀 Workflow Activity Sync
+
+SNSync supports the **Legacy Workflow Engine** with full read/write sync of `wf_activity` Run Script code stored in `sys_variable_value`.
+
+*   **`variableScript`**: Pull and push the `script` field of Run Script activities (resolved via `sys_variable_value`, not directly on the activity record).
+*   **`workflowCheckout: true`**: When pushing to a published (read-only) workflow, SNSync auto-checkouts a new draft version, clones all activities, transitions, and variable values, updates local files, then pushes the script — all in a single command.
+*   **Transition Map**: Every `--pull` on `wf_activity` saves `_wf_transitions.json` to the table folder for auditing and git history.
+
+### ServiceNow Platform Limitations (and how SNSync works around them)
+
+Two ServiceNow behaviors block standard REST-only workflow sync:
+
+| Problem | Why it happens | SNSync fix |
+|---|---|---|
+| `wf_transition` connections break on insert | BR "Update workflow version" resets `from`/`to` to published-version activities | Scripted REST endpoint with `gr.setWorkflow(false)` |
+| `sys_variable_value` POST returns 403 | ACL blocks INSERT for REST API users | Same endpoint, server-side GlideRecord bypasses ACL |
+
+**Install the endpoint once per instance:**
+
+```bash
+node _tool/sn-sync.js --install-endpoint --project projects/your-project
+```
+
+This creates the `SNSync Workflow Utilities` Scripted REST API (`/api/snsync/v1`) on your instance. All subsequent checkouts and variable value pushes route through it automatically.
+
+See [`_tool/Docs/workflow-guide.md`](_tool/Docs/workflow-guide.md) for full setup, `sn-config.json` options, and troubleshooting.
+
 ## 🛠️ Tech Stack
 
 *   **Node.js**: Automation core.

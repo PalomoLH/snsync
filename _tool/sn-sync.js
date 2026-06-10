@@ -8,6 +8,124 @@ const crypto = require("crypto");
 const readline = require("readline");
 const FlowModifier = require("./flow-modifier");
 
+// --- SNSYNC SCRIPTED REST ENDPOINT SCRIPTS ---
+// Embedded server-side scripts installed by --install-endpoint.
+// These run in ServiceNow context and bypass REST API limitations:
+//   finalize_clone : clones transitions (setWorkflow=false) + sys_variable_value after checkout
+//   variable_value : creates/updates a sys_variable_value record (ACL INSERT bypass)
+const SNSYNC_FINALIZE_CLONE_SCRIPT = `(function process(/*RESTAPIRequest*/ request, /*RESTAPIResponse*/ response) {
+    var body = request.body.data;
+    var oldVersionId = body.old_version_id;
+    var newVersionId = body.new_version_id;
+    var actIdMap = body.act_id_map || null;
+
+    if (!oldVersionId || !newVersionId) {
+        response.setStatus(400);
+        response.setBody({ error: 'old_version_id and new_version_id are required' });
+        return;
+    }
+
+    // If actIdMap not provided by caller, build it from activity name matching
+    if (!actIdMap) {
+        var oldNameToId = {};
+        actIdMap = {};
+        var gr = new GlideRecord('wf_activity');
+        gr.addQuery('workflow_version', oldVersionId);
+        gr.query();
+        while (gr.next()) oldNameToId[gr.name.toString()] = gr.sys_id.toString();
+
+        gr = new GlideRecord('wf_activity');
+        gr.addQuery('workflow_version', newVersionId);
+        gr.query();
+        while (gr.next()) {
+            var n = gr.name.toString();
+            if (oldNameToId[n]) actIdMap[oldNameToId[n]] = gr.sys_id.toString();
+        }
+    }
+
+    // Clone transitions with setWorkflow(false) — bypasses the 'Update workflow version' BR
+    // that normalises from/to back to published-version activities when using REST API.
+    var transCreated = 0, transSkipped = 0;
+    gr = new GlideRecord('wf_transition');
+    gr.addQuery('from.workflow_version', oldVersionId);
+    gr.query();
+    while (gr.next()) {
+        var fromId = gr.from.toString();
+        var toId = gr.to.toString();
+        var newFrom = actIdMap[fromId];
+        var newTo = actIdMap[toId];
+        if (!newFrom || !newTo) { transSkipped++; continue; }
+        var nt = new GlideRecord('wf_transition');
+        nt.initialize();
+        nt.from = newFrom;
+        nt.to = newTo;
+        nt.condition = gr.condition.toString();
+        nt.setWorkflow(false);
+        nt.insert();
+        transCreated++;
+    }
+
+    // Clone sys_variable_value records (scripts and other variable inputs)
+    var varsCreated = 0;
+    for (var oldId in actIdMap) {
+        var newId = actIdMap[oldId];
+        var gv = new GlideRecord('sys_variable_value');
+        gv.addQuery('document', 'wf_activity');
+        gv.addQuery('document_key', oldId);
+        gv.query();
+        while (gv.next()) {
+            var nv = new GlideRecord('sys_variable_value');
+            nv.initialize();
+            nv.document = 'wf_activity';
+            nv.document_key = newId;
+            nv.variable = gv.variable.toString();
+            nv.value = gv.value.toString();
+            nv.insert();
+            varsCreated++;
+        }
+    }
+
+    response.setStatus(200);
+    response.setBody({
+        act_id_map: actIdMap,
+        transitions_created: transCreated,
+        transitions_skipped: transSkipped,
+        variable_values_created: varsCreated
+    });
+})(request, response);`;
+
+const SNSYNC_VARIABLE_VALUE_SCRIPT = `(function process(/*RESTAPIRequest*/ request, /*RESTAPIResponse*/ response) {
+    var body = request.body.data;
+    if (!body.document_key || !body.variable) {
+        response.setStatus(400);
+        response.setBody({ error: 'document_key and variable are required' });
+        return;
+    }
+
+    var doc = body.document || 'wf_activity';
+    var gr = new GlideRecord('sys_variable_value');
+    gr.addQuery('document', doc);
+    gr.addQuery('document_key', body.document_key);
+    gr.addQuery('variable', body.variable);
+    gr.query();
+
+    if (gr.next()) {
+        gr.value = body.value || '';
+        gr.update();
+        response.setBody({ sys_id: gr.sys_id.toString(), created: false, updated: true });
+    } else {
+        var nv = new GlideRecord('sys_variable_value');
+        nv.initialize();
+        nv.document = doc;
+        nv.document_key = body.document_key;
+        nv.variable = body.variable;
+        nv.value = body.value || '';
+        nv.insert();
+        response.setBody({ sys_id: nv.sys_id.toString(), created: true });
+    }
+    response.setStatus(200);
+})(request, response);`;
+
 // --- ENVIRONMENT PREPARATION (Allows running from root by specifying the project) ---
 // Checks if --project "path/to/folder" was passed
 const args = process.argv.slice(2);
@@ -1114,6 +1232,48 @@ async function pullFromServiceNow(options = {}) {
           await pullFlowDetails(sysId, recordDir);
         }
       }
+
+      // For wf_activity pulls filtered by a workflow version, also save a transition map
+      // so developers can visualise the workflow structure without opening ServiceNow.
+      if (table === "wf_activity" && options.query) {
+        const wfVerMatch = options.query.match(/workflow_version=([a-f0-9]{32})/i);
+        if (wfVerMatch) {
+          try {
+            const versionId = wfVerMatch[1];
+            const transRes = await snClient.get(
+              `/api/now/table/wf_transition?sysparm_query=${encodeURIComponent(
+                `from.workflow_version=${versionId}`,
+              )}&sysparm_fields=sys_id,from,to,condition&sysparm_limit=500&sysparm_display_value=true`,
+            );
+            const transitions = (transRes.data.result || []).map((t) => ({
+              sys_id: typeof t.sys_id === "object" ? t.sys_id.value : t.sys_id,
+              from: typeof t.from === "object" ? t.from.display_value : t.from,
+              from_sys_id: typeof t.from === "object" ? t.from.value : t.from,
+              to: typeof t.to === "object" ? t.to.display_value : t.to,
+              to_sys_id: typeof t.to === "object" ? t.to.value : t.to,
+              condition: typeof t.condition === "object" ? t.condition.display_value : t.condition,
+            }));
+            const tableDir = path.join(CONFIG.localFolder, table);
+            fs.ensureDirSync(tableDir);
+            fs.writeJsonSync(
+              path.join(tableDir, "_wf_transitions.json"),
+              {
+                _meta: {
+                  workflow_version: versionId,
+                  generated_at: new Date().toISOString(),
+                  total: transitions.length,
+                },
+                transitions,
+              },
+              { spaces: 2 },
+            );
+            console.log(`   🔀 Transition map: ${transitions.length} transitions → _wf_transitions.json`);
+          } catch (_) {
+            // Not critical — skip silently if transitions can't be fetched
+          }
+        }
+      }
+
       console.log(
         `   ✅ ${table}: ${records.length} records downloaded/updated.`,
       );
@@ -1648,7 +1808,8 @@ async function checkoutWorkflow(publishedVersionSysId) {
       ? pubVer.workflow.value
       : pubVer.workflow;
 
-  // 2. Reuse an existing non-published version if one already exists
+  // 2. Reuse an existing non-published version if one already exists,
+  //    but patch it if it's missing activities from the published version.
   const existingRes = await snClient.get(
     `/api/now/table/wf_workflow_version?sysparm_query=${encodeURIComponent(
       `workflow=${workflowSysId}^published=false^active=true`,
@@ -1657,7 +1818,57 @@ async function checkoutWorkflow(publishedVersionSysId) {
   if (existingRes.data.result.length > 0) {
     const existing = existingRes.data.result[0];
     console.log(`   ℹ️  Reusing existing checkout: ${existing.name} (${existing.sys_id})`);
-    return await buildActIdMapAcrossVersions(existing.sys_id, publishedVersionSysId);
+
+    // Check if the checkout has all activities from the published version.
+    const [pubActsRes, checkActsRes] = await Promise.all([
+      snClient.get(
+        `/api/now/table/wf_activity?sysparm_query=${encodeURIComponent(
+          `workflow_version=${publishedVersionSysId}`,
+        )}&sysparm_fields=sys_id,name&sysparm_limit=500&sysparm_display_value=false`,
+      ),
+      snClient.get(
+        `/api/now/table/wf_activity?sysparm_query=${encodeURIComponent(
+          `workflow_version=${existing.sys_id}`,
+        )}&sysparm_fields=sys_id,name&sysparm_limit=500&sysparm_display_value=false`,
+      ),
+    ]);
+    const checkActNames = new Set(checkActsRes.data.result.map((a) => a.name));
+    const missingCount = pubActsRes.data.result.filter((a) => !checkActNames.has(a.name)).length;
+
+    if (missingCount > 0) {
+      // The existing checkout is incomplete. Deactivate it so a fresh full clone is created.
+      console.log(
+        `   ⚠️  Checkout is missing ${missingCount} activities. Deactivating to create a fresh clone...`,
+      );
+      try {
+        await snClient.patch(
+          `/api/now/table/wf_workflow_version/${existing.sys_id}`,
+          { active: "false" },
+        );
+        console.log(`   ✅ Deactivated incomplete checkout ${existing.sys_id}`);
+      } catch (deactErr) {
+        // Can't deactivate via API — fall back to incomplete map and warn the user.
+        console.warn(
+          `   ⚠️  Could not deactivate incomplete checkout (${deactErr.response?.status || deactErr.message}).`,
+        );
+        console.warn(
+          `   ℹ️  Open the Yoobic workflow in ServiceNow Workflow Editor, delete the draft version, then re-run push.`,
+        );
+        const { actIdMap: partialMap } = await buildActIdMapAcrossVersions(
+          existing.sys_id,
+          publishedVersionSysId,
+        );
+        return { newVersionId: existing.sys_id, actIdMap: partialMap };
+      }
+      // Fall through to step 3 to create a fresh complete checkout
+    } else {
+      // Checkout is complete — build and return the activity map.
+      const { actIdMap: fullMap } = await buildActIdMapAcrossVersions(
+        existing.sys_id,
+        publishedVersionSysId,
+      );
+      return { newVersionId: existing.sys_id, actIdMap: fullMap };
+    }
   }
 
   // 3. Create a fresh checkout version
@@ -1695,49 +1906,54 @@ async function checkoutWorkflow(publishedVersionSysId) {
   }
   console.log(`   📋 Cloned ${Object.keys(actIdMap).length} activities`);
 
-  // 5. Clone transitions (rewire from/to to new activity sys_ids)
-  const transRes = await snClient.get(
-    `/api/now/table/wf_transition?sysparm_query=${encodeURIComponent(
-      `from.workflow_version=${publishedVersionSysId}`,
-    )}&sysparm_fields=sys_id,name,from,to,condition&sysparm_limit=1000&sysparm_display_value=false`,
-  );
-  let transCloned = 0;
-  for (const trans of transRes.data.result) {
-    const fromId = trans.from?.value || trans.from;
-    const toId = trans.to?.value || trans.to;
-    const newFrom = actIdMap[fromId];
-    const newTo = actIdMap[toId];
-    if (newFrom && newTo) {
-      await snClient.post("/api/now/table/wf_transition", {
-        from: newFrom,
-        to: newTo,
-        name: trans.name || "",
-        condition: trans.condition?.value || trans.condition,
-      });
-      transCloned++;
-    }
-  }
-  console.log(`   🔀 Cloned ${transCloned} transitions`);
-
-  // 6. Clone sys_variable_value records (script bodies and other inputs)
-  let varCloned = 0;
-  for (const [oldActId, newActId] of Object.entries(actIdMap)) {
-    const varValRes = await snClient.get(
-      `/api/now/table/sys_variable_value?sysparm_query=${encodeURIComponent(
-        `table=wf_activity^document_key=${oldActId}`,
-      )}&sysparm_fields=sys_id,variable,value&sysparm_limit=50`,
+  // 5 & 6. Clone transitions + sys_variable_value via SNSync scripted REST endpoint.
+  //   Direct REST cannot do this: the 'Update workflow version' BR normalises
+  //   transition from/to back to published activities, and ACL blocks sys_variable_value
+  //   INSERT. The endpoint runs server-side and bypasses both limitations.
+  //   Falls back to a best-effort REST clone (variable values only) if not installed.
+  let transCloned = 0, varCloned = 0;
+  try {
+    const cloneRes = await snClient.post(
+      "/api/snsync/v1/workflow/finalize_clone",
+      { old_version_id: publishedVersionSysId, new_version_id: newVersionId, act_id_map: actIdMap },
     );
-    for (const varVal of varValRes.data.result) {
-      await snClient.post("/api/now/table/sys_variable_value", {
-        table: "wf_activity",
-        document_key: newActId,
-        variable: varVal.variable?.value || varVal.variable,
-        value: varVal.value || "",
-      });
-      varCloned++;
+    transCloned = cloneRes.data.transitions_created || 0;
+    varCloned = cloneRes.data.variable_values_created || 0;
+    // Merge server-side actIdMap in case it computed additional entries
+    if (cloneRes.data.act_id_map) Object.assign(actIdMap, cloneRes.data.act_id_map);
+    console.log(`   🔀 Cloned ${transCloned} transitions, ${varCloned} variable values (SNSync endpoint)`);
+  } catch (endpointErr) {
+    if (endpointErr.response?.status === 404) {
+      console.warn(`   ⚠️  SNSync endpoint not installed — transitions NOT cloned.`);
+      console.warn(`   ℹ️  Run: node snsync --install-endpoint  to install it once.`);
+    } else {
+      // Real error from the endpoint — surface it
+      const msg = endpointErr.response?.data?.error?.message || endpointErr.message;
+      console.warn(`   ⚠️  SNSync endpoint error (${endpointErr.response?.status}): ${msg}`);
     }
+    // Fallback: try cloning variable values via direct REST (transitions will be missing)
+    for (const [oldActId, newActId] of Object.entries(actIdMap)) {
+      try {
+        const varValRes = await snClient.get(
+          `/api/now/table/sys_variable_value?sysparm_query=${encodeURIComponent(
+            `table=wf_activity^document_key=${oldActId}`,
+          )}&sysparm_fields=sys_id,variable,value&sysparm_limit=50`,
+        );
+        for (const varVal of varValRes.data.result) {
+          try {
+            await snClient.post("/api/now/table/sys_variable_value", {
+              document: "wf_activity",
+              document_key: newActId,
+              variable: varVal.variable?.value || varVal.variable,
+              value: varVal.value || "",
+            });
+            varCloned++;
+          } catch (_) { /* ACL may block INSERT — will be empty until --install-endpoint */ }
+        }
+      } catch (_) { /* skip on error */ }
+    }
+    if (varCloned > 0) console.log(`   📝 Cloned ${varCloned} variable values (direct REST fallback)`);
   }
-  console.log(`   📝 Cloned ${varCloned} variable values`);
 
   return { newVersionId, actIdMap };
 }
@@ -1758,9 +1974,14 @@ async function buildActIdMapAcrossVersions(newVersionId, oldVersionId) {
   ]);
   const actIdMap = {};
   for (const oldAct of oldRes.data.result) {
-    const match = newRes.data.result.find(
+    // Try exact match first (name + position); fall back to name-only when
+    // x/y string formats differ between published and cloned versions.
+    let match = newRes.data.result.find(
       (a) => a.name === oldAct.name && a.x === oldAct.x && a.y === oldAct.y,
     );
+    if (!match) {
+      match = newRes.data.result.find((a) => a.name === oldAct.name);
+    }
     if (match) actIdMap[oldAct.sys_id] = match.sys_id;
   }
   return { newVersionId, actIdMap };
@@ -1980,6 +2201,121 @@ async function pushToServiceNow(filePath, tableOverride = null) {
           ? fs.readFileSync(path.join(dirPath, ".sys_id"), "utf8").trim()
           : sysId;
         const recordUrl = generateRecordUrl(table, freshSysId);
+        console.log(`   ✨ Success! Variable value updated in ServiceNow.`);
+        console.log(`      🔗 ${recordUrl}`);
+      } catch (error) {
+        console.error(
+          `   🔥 Error:`,
+          error.response?.data?.error?.message || error.message,
+        );
+      }
+      return;
+    }
+
+    // Fallback: variableScript is configured for this field but no variable_values
+    // entry is cached yet (e.g. newly created activity with no sys_variable_value).
+    // Look up the record on the server; create one if it doesn't exist.
+    const varScriptField =
+      tableConfig.variableScript &&
+      (typeof tableConfig.variableScript === "string"
+        ? tableConfig.variableScript
+        : tableConfig.variableScript.field || "script");
+    if (varScriptField && varScriptField === field) {
+      let currentSysId = sysId;
+
+      // Checkout if needed before querying (published version's activities are read-only)
+      if (tableConfig.workflowCheckout && wfMeta && wfMeta.workflow_version) {
+        try {
+          const { editable, workflowSysId } = await checkWorkflowVersionEditable(
+            wfMeta.workflow_version,
+          );
+          if (!editable) {
+            console.log(`\n⚙️  Workflow is published. Initiating auto-checkout...`);
+            if (workflowSysId) {
+              console.log(`   🔗 ${generateRecordUrl("wf_workflow", workflowSysId)}`);
+            }
+            const { newVersionId, actIdMap } = await checkoutWorkflow(wfMeta.workflow_version);
+            await refreshLocalWorkflowActivities(
+              newVersionId,
+              actIdMap,
+              wfMeta.workflow_version,
+              table,
+            );
+            try { wfMeta = fs.readJsonSync(wfMetaPath); } catch (e) { wfMeta = {}; }
+            console.log("   ✅ Checkout complete. Continuing push...");
+          }
+        } catch (coErr) {
+          console.error(`   🛑 Checkout failed: ${coErr.message}`);
+          return;
+        }
+      }
+
+      // Re-read sysId in case checkout updated .sys_id
+      currentSysId = fs.existsSync(path.join(dirPath, ".sys_id"))
+        ? fs.readFileSync(path.join(dirPath, ".sys_id"), "utf8").trim()
+        : sysId;
+
+      const content = fs.readFileSync(filePath, "utf8");
+
+      try {
+        // Try to find an existing sys_variable_value for this activity+field
+        const lookupRes = await snClient.get(
+          `/api/now/table/sys_variable_value?sysparm_query=${encodeURIComponent(
+            `table=${table}^document_key=${currentSysId}^variable.element=${varScriptField}`,
+          )}&sysparm_fields=sys_id&sysparm_limit=1`,
+        );
+
+        let resolvedVarSysId;
+        if (lookupRes.data.result.length > 0) {
+          resolvedVarSysId = lookupRes.data.result[0].sys_id;
+          await snClient.put(`/api/now/table/sys_variable_value/${resolvedVarSysId}`, {
+            value: content,
+          });
+        } else {
+          // No record exists — find the variable definition from any other activity
+          // that uses the same element name, then POST a new record.
+          const varDefRes = await snClient.get(
+            `/api/now/table/sys_variable_value?sysparm_query=${encodeURIComponent(
+              `table=${table}^variable.element=${varScriptField}`,
+            )}&sysparm_fields=variable&sysparm_limit=1`,
+          );
+          if (varDefRes.data.result.length === 0) {
+            console.error(
+              `   🔥 Error: No variable definition found for '${varScriptField}' on ${table}`,
+            );
+            return;
+          }
+          const varRef = varDefRes.data.result[0].variable;
+          const varDefSysId = typeof varRef === "object" ? varRef.value : varRef;
+          const varPostPayload = {
+            document: table,
+            document_key: currentSysId,
+            variable: varDefSysId,
+            value: content,
+          };
+          let createdSysId;
+          try {
+            const postRes = await snClient.post(`/api/now/table/sys_variable_value`, varPostPayload);
+            createdSysId = postRes.data.result.sys_id;
+          } catch (postErr) {
+            if (postErr.response?.status === 403) {
+              // REST API user lacks INSERT ACL on sys_variable_value — route through SNSync endpoint
+              console.log(`   ↪️  Direct POST blocked (ACL 403). Trying SNSync endpoint...`);
+              const svRes = await snClient.post(`/api/snsync/v1/workflow/variable_value`, varPostPayload);
+              createdSysId = svRes.data.sys_id;
+            } else {
+              throw postErr;
+            }
+          }
+          resolvedVarSysId = createdSysId;
+        }
+
+        // Cache the resolved sys_id locally so future pushes skip this lookup
+        if (!wfMeta.variable_values) wfMeta.variable_values = {};
+        wfMeta.variable_values[field] = { sys_id: resolvedVarSysId };
+        fs.writeJsonSync(wfMetaPath, wfMeta, { spaces: 2 });
+
+        const recordUrl = generateRecordUrl(table, currentSysId);
         console.log(`   ✨ Success! Variable value updated in ServiceNow.`);
         console.log(`      🔗 ${recordUrl}`);
       } catch (error) {
@@ -2630,6 +2966,100 @@ async function createUpdateSet(name, scopeParam) {
   return result;
 }
 
+// --- SNSYNC ENDPOINT INSTALLER ---
+// Creates the SNSync Scripted REST API provider + resources on ServiceNow.
+// Required for workflow checkout to correctly clone transitions and variable values.
+async function installSnSyncEndpoint() {
+  console.log("🔧 Installing SNSync Scripted REST API on ServiceNow...");
+
+  // Check / create the REST API provider
+  let providerId;
+  try {
+    const existingRes = await snClient.get("/api/now/table/sys_ws_provider", {
+      params: {
+        sysparm_query: "namespace=snsync^name=SNSync Workflow Utilities",
+        sysparm_fields: "sys_id,name",
+        sysparm_limit: 1,
+      },
+    });
+    if (existingRes.data.result.length > 0) {
+      providerId = existingRes.data.result[0].sys_id;
+      console.log(`   ℹ️  Provider already exists: ${providerId}`);
+    } else {
+      const provRes = await snClient.post("/api/now/table/sys_ws_provider", {
+        name: "SNSync Workflow Utilities",
+        namespace: "snsync",
+        short_description:
+          "Server-side endpoints for SNSync workflow operations requiring setWorkflow(false) or ACL bypass",
+      });
+      providerId = provRes.data.result.sys_id;
+      console.log(`   ✅ Provider created: ${providerId}`);
+    }
+  } catch (e) {
+    if (e.response?.status === 403) {
+      console.error("❌ Permission denied creating sys_ws_provider.");
+      console.error("   Your user needs the 'admin' or 'web_service_admin' role.");
+    } else {
+      console.error(`❌ Failed to create provider: ${e.response?.data?.error?.message || e.message}`);
+    }
+    return;
+  }
+
+  const resources = [
+    {
+      name: "finalize_clone",
+      relative_path: "/v1/workflow/finalize_clone",
+      http_method: "POST",
+      short_description:
+        "Clone wf_transition (setWorkflow bypass) + sys_variable_value records for a workflow checkout",
+      operation_script: SNSYNC_FINALIZE_CLONE_SCRIPT,
+    },
+    {
+      name: "variable_value",
+      relative_path: "/v1/workflow/variable_value",
+      http_method: "POST",
+      short_description: "Create or update a sys_variable_value record (bypasses INSERT ACL)",
+      operation_script: SNSYNC_VARIABLE_VALUE_SCRIPT,
+    },
+  ];
+
+  for (const res of resources) {
+    try {
+      const existing = await snClient.get("/api/now/table/sys_ws_resource", {
+        params: {
+          sysparm_query: `web_service_definition=${providerId}^http_method=${res.http_method}^relative_path=${res.relative_path}`,
+          sysparm_fields: "sys_id",
+          sysparm_limit: 1,
+        },
+      });
+      if (existing.data.result.length > 0) {
+        await snClient.patch(
+          `/api/now/table/sys_ws_resource/${existing.data.result[0].sys_id}`,
+          { operation_script: res.operation_script },
+        );
+        console.log(`   🔄 Updated resource: ${res.name}`);
+      } else {
+        await snClient.post("/api/now/table/sys_ws_resource", {
+          web_service_definition: providerId,
+          name: res.name,
+          relative_path: res.relative_path,
+          http_method: res.http_method,
+          short_description: res.short_description,
+          operation_script: res.operation_script,
+        });
+        console.log(`   ✅ Created resource: ${res.name} (${res.http_method} /api/snsync${res.relative_path})`);
+      }
+    } catch (e) {
+      console.error(`   ❌ Failed on resource '${res.name}': ${e.response?.data?.error?.message || e.message}`);
+    }
+  }
+
+  console.log("✅ SNSync Endpoint installed!");
+  console.log(`   📡 Base URL: ${CONFIG.url}/api/snsync/v1`);
+  console.log(`   🔗 ${generateRecordUrl("sys_ws_provider", providerId)}`);
+  console.log("\n💡 Tip: callers need 'snc_internal' or 'rest_service' role (or admin).");
+}
+
 async function main() {
   // Resolve --update-set name → sys_id before any push/pull
   const rawUpdateSet = cliUpdateSetSysId || snUpdateSetSysId;
@@ -2821,8 +3251,10 @@ async function main() {
       process.exit(1);
     }
     await createUpdateSet(usName, scope);
+  } else if (args.includes("--install-endpoint")) {
+    await installSnSyncEndpoint();
   } else {
-    console.log("Commands: node snsync --pull | node snsync --watch");
+    console.log("Commands: node snsync --pull | node snsync --watch | node snsync --install-endpoint");
   }
 } // end main()
 
