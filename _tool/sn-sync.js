@@ -156,11 +156,25 @@ async function startBrowserLogin() {
   return new Promise((resolve, reject) => {
     const app = express();
     let server;
+    const oauthState = crypto.randomBytes(32).toString("hex");
 
     console.log("🌍 Starting local authentication server...");
 
     app.get("/callback", async (req, res) => {
       const code = req.query.code;
+      const returnedState = req.query.state;
+
+      if (returnedState !== oauthState) {
+        res
+          .status(403)
+          .send(
+            "<h1>Login failed</h1><p>Invalid state parameter. Possible CSRF attack.</p>",
+          );
+        reject(new Error("OAuth state mismatch — possible CSRF attack"));
+        server.close();
+        return;
+      }
+
       if (code) {
         res.send(
           "<h1>Login successful!</h1><p>You can close this window and return to the terminal.</p>",
@@ -208,7 +222,7 @@ async function startBrowserLogin() {
     });
 
     server = app.listen(3000, async () => {
-      const authUrl = `${CONFIG.oauth.authUrl}?response_type=code&client_id=${CONFIG.oauth.clientId}&redirect_uri=${CONFIG.oauth.redirectUri}&state=2&scope=openid profile email`;
+      const authUrl = `${CONFIG.oauth.authUrl}?response_type=code&client_id=${CONFIG.oauth.clientId}&redirect_uri=${encodeURIComponent(CONFIG.oauth.redirectUri)}&state=${oauthState}&scope=openid profile email`;
       console.log(`🚀 Opening browser for login: ${authUrl}`);
       await open(authUrl);
     });
@@ -798,7 +812,7 @@ async function pullFromServiceNow(options = {}) {
   console.log("⬇️  Starting Smart Download...");
 
   const contextOptions = {
-    mode: options.contextAction || "prompt",
+    mode: options.contextAction || "skip",
     selection: options.contextList || "",
   };
 
@@ -869,6 +883,9 @@ async function pullFromServiceNow(options = {}) {
     if (config.variableFields && config.variableFields.length > 0) {
       fetchFields.push("definition", "workflow_version");
     }
+    if (config.variableScript) {
+      fetchFields.push("workflow_version", "activity_definition");
+    }
 
     fetchFields = [...new Set(fetchFields)]; // Unique
 
@@ -887,7 +904,6 @@ async function pullFromServiceNow(options = {}) {
         continue;
       }
 
-      // --- AI Context tags prompt disabled (always skip) ---
       let contextTags = [];
 
       // Helper to get raw value regardless of display_value mode
@@ -996,6 +1012,52 @@ async function pullFromServiceNow(options = {}) {
               { spaces: 2 },
             );
             console.log(`      🔗 Resolved variable fields for ${safeName}`);
+          }
+        }
+
+        // --- FEATURE: variableScript — fetch script from sys_variable_value ---
+        // For tables like wf_activity (Run Script), the script field is not on the record
+        // itself but stored in sys_variable_value keyed by (table, document_key, variable.element).
+        if (config.variableScript) {
+          const varField =
+            typeof config.variableScript === "string"
+              ? config.variableScript
+              : config.variableScript.field || "script";
+          const varExt =
+            typeof config.variableScript === "object" && config.variableScript.ext
+              ? config.variableScript.ext
+              : "js";
+          const workflowVersion =
+            getVal(rec, "workflow_version") || null;
+
+          try {
+            const varRes = await snClient.get(
+              `/api/now/table/sys_variable_value?sysparm_query=${encodeURIComponent(`table=${table}^document_key=${sysId}^variable.element=${varField}`)}&sysparm_fields=sys_id%2Cvalue&sysparm_limit=1`,
+            );
+            const varRecord = varRes.data?.result?.[0];
+            // Always write the script file (empty string if no value yet)
+            fs.outputFileSync(
+              path.join(recordDir, `${varField}.${varExt}`),
+              varRecord ? (varRecord.value || "") : "",
+            );
+            // Save .wf_meta.json for push routing + checkout check
+            const wfMeta = {
+              workflow_version: workflowVersion,
+              variable_values: {},
+            };
+            if (varRecord) {
+              wfMeta.variable_values[varField] = { sys_id: varRecord.sys_id };
+              console.log(`      🔗 Script resolved for ${safeName}`);
+            }
+            fs.writeJsonSync(
+              path.join(recordDir, ".wf_meta.json"),
+              wfMeta,
+              { spaces: 2 },
+            );
+          } catch (e) {
+            console.warn(
+              `      ⚠️ Could not fetch variable script for ${safeName}: ${e.message}`,
+            );
           }
         }
 
@@ -1571,6 +1633,204 @@ async function checkWorkflowVersionEditable(versionSysId) {
   }
 }
 
+// --- WORKFLOW CHECKOUT: Clone a published version into a new editable one ---
+// Creates a new wf_workflow_version (not published), clones all activities,
+// transitions, and sys_variable_value entries, then returns the mapping of
+// old activity sys_ids → new ones so local files can be refreshed.
+async function checkoutWorkflow(publishedVersionSysId) {
+  // 1. Load published version metadata
+  const verRes = await snClient.get(
+    `/api/now/table/wf_workflow_version/${publishedVersionSysId}?sysparm_fields=sys_id,name,description,workflow,active`,
+  );
+  const pubVer = verRes.data.result;
+  const workflowSysId =
+    pubVer.workflow && typeof pubVer.workflow === "object"
+      ? pubVer.workflow.value
+      : pubVer.workflow;
+
+  // 2. Reuse an existing non-published version if one already exists
+  const existingRes = await snClient.get(
+    `/api/now/table/wf_workflow_version?sysparm_query=${encodeURIComponent(
+      `workflow=${workflowSysId}^published=false^active=true`,
+    )}&sysparm_fields=sys_id,name&sysparm_limit=1`,
+  );
+  if (existingRes.data.result.length > 0) {
+    const existing = existingRes.data.result[0];
+    console.log(`   ℹ️  Reusing existing checkout: ${existing.name} (${existing.sys_id})`);
+    return await buildActIdMapAcrossVersions(existing.sys_id, publishedVersionSysId);
+  }
+
+  // 3. Create a fresh checkout version
+  const newVerRes = await snClient.post("/api/now/table/wf_workflow_version", {
+    workflow: workflowSysId,
+    name: pubVer.name,
+    description: pubVer.description || "",
+    active: "true",
+    published: "false",
+  });
+  const newVersionId = newVerRes.data.result.sys_id;
+  console.log(`   ✅ New version created: ${newVersionId}`);
+
+  // 4. Clone all activities
+  const actRes = await snClient.get(
+    `/api/now/table/wf_activity?sysparm_query=${encodeURIComponent(
+      `workflow_version=${publishedVersionSysId}`,
+    )}&sysparm_fields=sys_id,name,activity_definition,x,y,input,description&sysparm_limit=500&sysparm_display_value=false`,
+  );
+  const activities = actRes.data.result;
+  const actIdMap = {}; // old sys_id → new sys_id
+
+  for (const act of activities) {
+    const newActRes = await snClient.post("/api/now/table/wf_activity", {
+      workflow_version: newVersionId,
+      name: act.name,
+      activity_definition:
+        act.activity_definition?.value || act.activity_definition,
+      x: act.x || "0",
+      y: act.y || "0",
+      input: act.input || "{}",
+      description: act.description || "",
+    });
+    actIdMap[act.sys_id] = newActRes.data.result.sys_id;
+  }
+  console.log(`   📋 Cloned ${Object.keys(actIdMap).length} activities`);
+
+  // 5. Clone transitions (rewire from/to to new activity sys_ids)
+  const transRes = await snClient.get(
+    `/api/now/table/wf_transition?sysparm_query=${encodeURIComponent(
+      `from.workflow_version=${publishedVersionSysId}`,
+    )}&sysparm_fields=sys_id,name,from,to,condition&sysparm_limit=1000&sysparm_display_value=false`,
+  );
+  let transCloned = 0;
+  for (const trans of transRes.data.result) {
+    const fromId = trans.from?.value || trans.from;
+    const toId = trans.to?.value || trans.to;
+    const newFrom = actIdMap[fromId];
+    const newTo = actIdMap[toId];
+    if (newFrom && newTo) {
+      await snClient.post("/api/now/table/wf_transition", {
+        from: newFrom,
+        to: newTo,
+        name: trans.name || "",
+        condition: trans.condition?.value || trans.condition,
+      });
+      transCloned++;
+    }
+  }
+  console.log(`   🔀 Cloned ${transCloned} transitions`);
+
+  // 6. Clone sys_variable_value records (script bodies and other inputs)
+  let varCloned = 0;
+  for (const [oldActId, newActId] of Object.entries(actIdMap)) {
+    const varValRes = await snClient.get(
+      `/api/now/table/sys_variable_value?sysparm_query=${encodeURIComponent(
+        `table=wf_activity^document_key=${oldActId}`,
+      )}&sysparm_fields=sys_id,variable,value&sysparm_limit=50`,
+    );
+    for (const varVal of varValRes.data.result) {
+      await snClient.post("/api/now/table/sys_variable_value", {
+        table: "wf_activity",
+        document_key: newActId,
+        variable: varVal.variable?.value || varVal.variable,
+        value: varVal.value || "",
+      });
+      varCloned++;
+    }
+  }
+  console.log(`   📝 Cloned ${varCloned} variable values`);
+
+  return { newVersionId, actIdMap };
+}
+
+// Build old→new activity sys_id map by matching name+position across two versions
+async function buildActIdMapAcrossVersions(newVersionId, oldVersionId) {
+  const [oldRes, newRes] = await Promise.all([
+    snClient.get(
+      `/api/now/table/wf_activity?sysparm_query=${encodeURIComponent(
+        `workflow_version=${oldVersionId}`,
+      )}&sysparm_fields=sys_id,name,x,y&sysparm_limit=500&sysparm_display_value=false`,
+    ),
+    snClient.get(
+      `/api/now/table/wf_activity?sysparm_query=${encodeURIComponent(
+        `workflow_version=${newVersionId}`,
+      )}&sysparm_fields=sys_id,name,x,y&sysparm_limit=500&sysparm_display_value=false`,
+    ),
+  ]);
+  const actIdMap = {};
+  for (const oldAct of oldRes.data.result) {
+    const match = newRes.data.result.find(
+      (a) => a.name === oldAct.name && a.x === oldAct.x && a.y === oldAct.y,
+    );
+    if (match) actIdMap[oldAct.sys_id] = match.sys_id;
+  }
+  return { newVersionId, actIdMap };
+}
+
+// After checkout, walk all local wf_activity folders and update .sys_id + .wf_meta.json
+// so the local repo points to the new editable version.
+async function refreshLocalWorkflowActivities(newVersionId, actIdMap, oldVersionId, table) {
+  const actDir = path.join(CONFIG.localFolder, table);
+  if (!fs.existsSync(actDir)) return;
+
+  const folders = fs.readdirSync(actDir).filter((f) => {
+    try {
+      return fs.statSync(path.join(actDir, f)).isDirectory();
+    } catch {
+      return false;
+    }
+  });
+
+  let updated = 0;
+  for (const folder of folders) {
+    const folderPath = path.join(actDir, folder);
+    const sysIdFile = path.join(folderPath, ".sys_id");
+    const wfMetaFile = path.join(folderPath, ".wf_meta.json");
+
+    if (!fs.existsSync(sysIdFile)) continue;
+    const oldSysId = fs.readFileSync(sysIdFile, "utf8").trim();
+    const newSysId = actIdMap[oldSysId];
+    if (!newSysId) continue;
+
+    // Update .sys_id to point to the new activity
+    fs.writeFileSync(sysIdFile, newSysId);
+
+    // Update .wf_meta.json: new version + new var_value sys_ids
+    if (fs.existsSync(wfMetaFile)) {
+      let meta = {};
+      try {
+        meta = fs.readJsonSync(wfMetaFile);
+      } catch (e) {
+        meta = {};
+      }
+      if (meta.workflow_version === oldVersionId) {
+        meta.workflow_version = newVersionId;
+        // Refresh sys_variable_value sys_ids for each stored variable
+        if (meta.variable_values) {
+          for (const varName of Object.keys(meta.variable_values)) {
+            try {
+              const varRes = await snClient.get(
+                `/api/now/table/sys_variable_value?sysparm_query=${encodeURIComponent(
+                  `table=wf_activity^document_key=${newSysId}^variable.element=${varName}`,
+                )}&sysparm_fields=sys_id&sysparm_limit=1`,
+              );
+              if (varRes.data.result.length > 0) {
+                meta.variable_values[varName] = {
+                  sys_id: varRes.data.result[0].sys_id,
+                };
+              }
+            } catch (e) {
+              // Leave existing entry unchanged if lookup fails
+            }
+          }
+        }
+        fs.writeJsonSync(wfMetaFile, meta, { spaces: 2 });
+      }
+    }
+    updated++;
+  }
+  console.log(`   📁 Refreshed ${updated} local activity files to new version`);
+}
+
 async function pushToServiceNow(filePath, tableOverride = null) {
   const fileName = path.basename(filePath);
 
@@ -1657,7 +1917,7 @@ async function pushToServiceNow(filePath, tableOverride = null) {
   // When a field is stored in sys_variable_value instead of directly on the record,
   // we route the push there instead of doing a normal PUT on the parent table.
   const wfMetaPath = path.join(dirPath, ".wf_meta.json");
-  if (fs.existsSync(wfMetaPath) && tableConfig.variableFields) {
+  if (fs.existsSync(wfMetaPath) && (tableConfig.variableFields || tableConfig.variableScript)) {
     let wfMeta;
     try {
       wfMeta = fs.readJsonSync(wfMetaPath);
@@ -1672,24 +1932,54 @@ async function pushToServiceNow(filePath, tableOverride = null) {
           wfMeta.workflow_version,
         );
         if (!editable) {
-          console.error(`\n🛑 BLOCKED: Workflow version is published (read-only).`);
-          console.error(`   Check out the workflow in ServiceNow before editing.`);
+          console.log(`\n⚙️  Workflow is published. Initiating auto-checkout...`);
           if (workflowSysId) {
-            console.error(`   🔗 ${generateRecordUrl("wf_workflow", workflowSysId)}`);
+            console.log(`   🔗 ${generateRecordUrl("wf_workflow", workflowSysId)}`);
           }
-          console.error(
-            `   After checkout, re-run --pull to refresh .wf_meta.json with the new version.`,
-          );
-          return;
+          try {
+            const { newVersionId, actIdMap } = await checkoutWorkflow(
+              wfMeta.workflow_version,
+            );
+            await refreshLocalWorkflowActivities(
+              newVersionId,
+              actIdMap,
+              wfMeta.workflow_version,
+              table,
+            );
+            // Re-read .wf_meta.json — it was updated with new version + var_value sys_ids
+            try {
+              wfMeta = fs.readJsonSync(wfMetaPath);
+            } catch (e) {
+              wfMeta = {};
+            }
+            console.log("   ✅ Checkout complete. Continuing push...");
+          } catch (coErr) {
+            console.error(`   🛑 Checkout failed: ${coErr.message}`);
+            console.error(
+              `   Please check out the workflow manually in ServiceNow and re-run --pull.`,
+            );
+            if (workflowSysId) {
+              console.error(`   🔗 ${generateRecordUrl("wf_workflow", workflowSysId)}`);
+            }
+            return;
+          }
         }
       }
 
+      // Re-resolve varSysId after potential checkout (wfMeta may have been refreshed)
+      const resolvedVarSysId =
+        (wfMeta.variable_values && wfMeta.variable_values[field]?.sys_id) || varSysId;
+
       const content = fs.readFileSync(filePath, "utf8");
       try {
-        await snClient.put(`/api/now/table/sys_variable_value/${varSysId}`, {
+        await snClient.put(`/api/now/table/sys_variable_value/${resolvedVarSysId}`, {
           value: content,
         });
-        const recordUrl = generateRecordUrl(table, sysId);
+        // Re-read new activity sys_id from refreshed .sys_id file (may have changed after checkout)
+        const freshSysId = fs.existsSync(path.join(dirPath, ".sys_id"))
+          ? fs.readFileSync(path.join(dirPath, ".sys_id"), "utf8").trim()
+          : sysId;
+        const recordUrl = generateRecordUrl(table, freshSysId);
         console.log(`   ✨ Success! Variable value updated in ServiceNow.`);
         console.log(`      🔗 ${recordUrl}`);
       } catch (error) {
