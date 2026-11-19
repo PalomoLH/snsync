@@ -4,8 +4,10 @@ This setup gives you the same Claude Code setup the team lead uses: the snsync C
 
 ## What you get from the team lead (private channels only)
 
-1. **`snsync-team-bundle.txt`**: one encrypted text file with every `projects/<env>/.env`, `sn-config.json`, and the shared memories. Opening it shows only encrypted text.
-2. **The passphrase**, sent separately (different channel from the bundle). Save it to a file, e.g. `~/Downloads/snsync-pass.txt`.
+1. **`snsync-team-kit-<date>.zip`**: the whole repo plus `team-private/snsync-team-bundle.txt`, one encrypted file with every `projects/<env>/.env`, `sn-config.json`, and the shared memories. Unzip it and follow `START-HERE.md` inside; it has the prompt with the right paths. (The team lead builds it with `bash team/package.sh`.)
+2. **The passphrase**, sent separately (different channel from the zip). Save it to a file, e.g. `~/Downloads/snsync-pass.txt`.
+
+If you got the zip, skip the `git clone` below and use the prompt in `START-HERE.md`.
 
 Never commit either file, and never paste them into a chat. This repo is public.
 
