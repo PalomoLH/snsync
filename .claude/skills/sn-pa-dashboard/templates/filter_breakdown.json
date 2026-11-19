@@ -1,0 +1,30 @@
+{
+  "filterId": "__FILTER_ID__",
+  "filterName": "__TITLE__",
+  "filterComponentType": "multiselect",
+  "datasource": {
+    "type": "pa",
+    "breakdown": {
+      "sysId": "__BREAKDOWN__",
+      "breakdownSourceName": "__BREAKDOWN_SOURCE_NAME__",
+      "isOfChoiceType": "__IS_CHOICE__",
+      "type": "AUTOMATED",
+      "factsTable": "__ELEMENT_TABLE__",
+      "field": "__ELEMENT_FIELD__",
+      "targetTable": "__ELEMENT_TABLE__"
+    }
+  },
+  "targets": "__TARGETS__",
+  "defaultSelectedItems": [],
+  "dateFilterView": "calendar-reldates",
+  "sort": "ASC",
+  "filterElementType": "pill",
+  "isShowSelectedValueInPill": true,
+  "filterElementLayout": "vertical",
+  "enableClearFilter": true,
+  "maxElements": 500,
+  "cascadeScope": "__TAB__",
+  "host": "dashboard",
+  "noDebounce": "",
+  "enableResetToDefault": false
+}

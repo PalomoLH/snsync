@@ -1,0 +1,8 @@
+{
+  "variant": "header-tertiary",
+  "label": "__TITLE__",
+  "wontWrap": false,
+  "hasNoMargin": false,
+  "level": "1",
+  "noDebounce": ""
+}

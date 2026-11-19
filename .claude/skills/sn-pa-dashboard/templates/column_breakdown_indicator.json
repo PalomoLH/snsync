@@ -1,0 +1,146 @@
+{
+  "configVersion": "23.0.0-ci-SNAPSHOT",
+  "showDataLabels": false,
+  "disableTooltip": false,
+  "showXGrid": false,
+  "showYGrid": true,
+  "hideYAxis0": false,
+  "yAxis0Position": "left",
+  "hideYAxis1": false,
+  "yAxis1Position": "right",
+  "hideYAxis2": false,
+  "yAxis2Position": "right",
+  "hideYAxis3": false,
+  "yAxis3Position": "right",
+  "hideYAxis4": false,
+  "yAxis4Position": "right",
+  "showLegend": true,
+  "showLegendValue": false,
+  "legendPosition": "bottom",
+  "legendHorizontalAlignment": "center",
+  "legendExpandToFit": false,
+  "yAxisStyle": "default",
+  "lineStrokeWidth": "2",
+  "colorConfig": {
+    "type": "default"
+  },
+  "chartVariation": "stacked",
+  "extensionType": "bar",
+  "newReporting": false,
+  "additionalGroupByConfig": [],
+  "dataSources": [
+    {
+      "allowRealTime": true,
+      "allowTotalValue": true,
+      "indicatorType": "__INDICATOR_TYPE__",
+      "isScriptedIndicator": false,
+      "label": "__LABEL__",
+      "sourceType": "indicator",
+      "uuid": {
+        "indicator": "__INDICATOR__",
+        "breakdowns": []
+      },
+      "preferredVisualizations": [
+        "18ac962264404bcc0039359d184b15f3"
+      ],
+      "id": "__DS_ID__",
+      "dataCategories": [
+        "trend",
+        "group",
+        "simple"
+      ]
+    }
+  ],
+  "showHeader": true,
+  "showTotalAggregate": false,
+  "showSubAggregate": false,
+  "showFirstGroupAggregate": false,
+  "showSecondGroupAggregate": false,
+  "hideMatrixAggregate": false,
+  "wrapTitle": false,
+  "showHeaderSeparator": true,
+  "headerTitle": "__TITLE__",
+  "showBorder": true,
+  "bareBorder": false,
+  "dataCategory": "group",
+  "telemetry": null,
+  "showDataPassthrough": false,
+  "showAdditionalGroupBySelector": false,
+  "dataPassthrough": null,
+  "metrics": [
+    {
+      "dataSource": "__DS_ID__",
+      "id": "__METRIC_ID__",
+      "aggregateIndicator": "__AGGREGATE__",
+      "frequency": "__FREQUENCY__",
+      "numberFormat": {
+        "customFormat": false
+      },
+      "axisId": "primary",
+      "frequencyInterval": "MONTH_PLUS"
+    }
+  ],
+  "sortBy": "value",
+  "sortByOrder": "desc",
+  "trendBy": {
+    "trendByFrequency": "date",
+    "trendByFields": []
+  },
+  "showChange": null,
+  "showChangePercentage": null,
+  "showTarget": false,
+  "showForecast": false,
+  "showForecastRange": false,
+  "showTrend": false,
+  "showConfidenceBand": false,
+  "showGapPercentage": null,
+  "showSparkline": null,
+  "showMetricLabel": null,
+  "showThreshold": false,
+  "showComment": false,
+  "showTotalValue": null,
+  "followFilters": true,
+  "showFilterIcon": true,
+  "enableRealTimeUpdate": null,
+  "enableDrilldown": true,
+  "enableCustomEmptyState": false,
+  "emptyStateIllustration": "no-data",
+  "emptyStateHeading": "No data available.",
+  "emptyStateContent": "There are no scores available for the selected criteria. Contact your admin for more info.",
+  "emptyStateAlignment": "vertical-centered",
+  "refreshFrequency": false,
+  "filterConfigurations": [],
+  "contextMenuActions": [],
+  "showMaximumRange": false,
+  "applyDateRange": false,
+  "numberOfPeriods": 12,
+  "showAbsolutePeriod": false,
+  "scoreType": "latest",
+  "showChangeFrom": null,
+  "startTime": null,
+  "endTime": null,
+  "period": "M",
+  "dateFormat": "default",
+  "noDebounce": "",
+  "groupBy": [
+    {
+      "groupBy": [
+        {
+          "dataSource": "__DS_ID__",
+          "groupByField": "__BREAKDOWN__",
+          "metric": "__METRIC_ID__",
+          "isRange": false,
+          "isChoice": "__IS_CHOICE__",
+          "isPaBucket": "__IS_BUCKET__"
+        }
+      ],
+      "maxNumberOfGroups": "__MAX_GROUPS__",
+      "numberOfGroupsBasedOn": "NO_OF_GROUP_BASED_ON_PER_METRIC",
+      "showOthers": false,
+      "hideZeroValues": false,
+      "disableRanges": false
+    }
+  ],
+  "componentId": "lb44wvyc",
+  "description": "Distribution of the incidents created priority wise."
+}

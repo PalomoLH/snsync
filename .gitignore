@@ -18,3 +18,8 @@ projects/*
 **/.ai_context/
 **/.sys_id
 **/.sys_updated_on
+
+# --- Team kit: encrypted bundle + passphrase (never commit) ---
+team-private/
+*.bundle.txt
+snsync-team-bundle*.txt

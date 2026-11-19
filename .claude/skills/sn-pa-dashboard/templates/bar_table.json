@@ -1,0 +1,138 @@
+{
+  "configVersion": "23.0.0-ci-SNAPSHOT",
+  "yAxisHidden": false,
+  "yAxisPosition": "bottom",
+  "yAxisShowGrid": true,
+  "xAxisWrapLabels": false,
+  "xAxisMaxLabelSize": 100,
+  "xAxisTruncationType": "end",
+  "yAxisStyle": "clean",
+  "showDataLabels": true,
+  "dataLabelPosition": "top",
+  "showStackedValues": "none",
+  "showOverlappingLabels": false,
+  "newReporting": false,
+  "dataSources": [
+    {
+      "isDatabaseView": false,
+      "allowRealTime": true,
+      "sourceType": "table",
+      "tableOrViewName": "__TABLE__",
+      "filterQuery": "__FILTER_QUERY__",
+      "preferredVisualizations": [
+        "d24d53f60350de7a652caf3188a46ed2"
+      ],
+      "id": "__DS_ID__",
+      "dataCategories": [
+        "trend",
+        "group",
+        "simple"
+      ]
+    }
+  ],
+  "headerTitle": "__TITLE__",
+  "showHeader": true,
+  "titleColor": {},
+  "headerColor": {},
+  "showBorder": true,
+  "showTotalAggregate": false,
+  "showSubAggregate": false,
+  "showFirstGroupAggregate": false,
+  "showSecondGroupAggregate": false,
+  "hideMatrixAggregate": false,
+  "wrapTitle": false,
+  "showHeaderSeparator": false,
+  "bareBorder": false,
+  "telemetry": "null",
+  "showDataPassthrough": false,
+  "metrics": [
+    {
+      "dataSource": "__DS_ID__",
+      "id": "__METRIC_ID__",
+      "aggregateFunction": "COUNT",
+      "axisId": "primary",
+      "numberFormat": {
+        "customFormat": true,
+        "rounding": "HALF_UP",
+        "decimalPrecision": 2,
+        "abbreviationEnabled": false,
+        "numberInTooltipsEnabled": true,
+        "thousandSeparatorEnabled": false
+      }
+    }
+  ],
+  "groupBy": [
+    {
+      "groupBy": [
+        {
+          "dataSource": "__DS_ID__",
+          "groupByField": "__GROUP_FIELD__",
+          "isRange": false,
+          "isChoice": "__IS_CHOICE__",
+          "isPaBucket": false
+        }
+      ],
+      "maxNumberOfGroups": "__MAX_GROUPS__",
+      "numberOfGroupsBasedOn": "NO_OF_GROUP_BASED_ON_PER_METRIC",
+      "showOthers": false
+    }
+  ],
+  "sortBy": "value",
+  "sortByOrder": "desc",
+  "showChange": false,
+  "showChangePercentage": false,
+  "showTarget": false,
+  "showForecast": false,
+  "showForecastRange": false,
+  "showTrend": false,
+  "showConfidenceBand": false,
+  "showGapPercentage": false,
+  "showSparkline": false,
+  "showMetricLabel": false,
+  "showThreshold": false,
+  "showComment": false,
+  "followFilters": true,
+  "showFilterIcon": true,
+  "enableRealTimeUpdate": false,
+  "enableDrilldown": true,
+  "enableCustomEmptyState": false,
+  "emptyStateIllustration": "no-data",
+  "emptyStateHeading": "No data available.",
+  "emptyStateContent": "There are no scores available for the selected criteria. Contact your admin for more info.",
+  "emptyStateAlignment": "vertical-centered",
+  "showMaximumRange": false,
+  "applyDateRange": false,
+  "numberOfPeriods": 3,
+  "showAbsolutePeriod": false,
+  "showChangeFrom": "previous",
+  "period": "M",
+  "dateFormat": "default",
+  "showDataTable": false,
+  "showLegend": false,
+  "showLegendValue": false,
+  "legendExpandToFit": false,
+  "legendPosition": "bottom",
+  "legendHorizontalAlignment": "center",
+  "chartVariation": "grouped",
+  "colorConfig": {
+    "type": "default"
+  },
+  "showLoadingIndicator": false,
+  "sharedContext": {
+    "colorDetails": {
+      "de699435d7033100b4964ebfae610331": [
+        {
+          "sysId": "de699435d7033100b4964ebfae610331",
+          "cssCustomProperty": "--now-datavis_color--qualitative-0",
+          "defaultColor": "47,126,216"
+        }
+      ]
+    },
+    "datasourceConfigurations": {
+      "table": {
+        "timeZone": "SESSION",
+        "useSeriesLabels": false
+      }
+    }
+  }
+}

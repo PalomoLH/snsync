@@ -1,0 +1,70 @@
+{
+  "showTotalAggregate": false,
+  "showSubAggregate": false,
+  "showFirstGroupAggregate": false,
+  "showSecondGroupAggregate": false,
+  "hideMatrixAggregate": false,
+  "enableDrilldown": true,
+  "newReporting": false,
+  "showSparkline": true,
+  "configVersion": "23.0.0-ci-SNAPSHOT",
+  "showMaximumRange": false,
+  "enableRealTimeUpdate": false,
+  "useRelativeScoreTime": false,
+  "showScoreUpdateTime": false,
+  "colorConfig": {
+    "type": "default"
+  },
+  "showFilterIcon": true,
+  "followFilters": true,
+  "showChange": true,
+  "showTarget": false,
+  "showGapPercentage": false,
+  "showScoreDate": true,
+  "showChangePercentage": true,
+  "showChangeFrom": true,
+  "showZero": false,
+  "description": "% Closed Incidents Originating from Phone Call",
+  "dataSources": [
+    {
+      "allowRealTime": false,
+      "allowTotalValue": false,
+      "indicatorType": "__INDICATOR_TYPE__",
+      "isScriptedIndicator": false,
+      "label": "__LABEL__",
+      "filter": "",
+      "sourceType": "indicator",
+      "uuid": {
+        "indicator": "__INDICATOR__",
+        "breakdowns": []
+      },
+      "preferredVisualizations": [
+        "18ac962264404bcc0039359d184b15f3"
+      ],
+      "id": "__DS_ID__",
+      "dataCategories": [
+        "trend",
+        "group",
+        "simple"
+      ]
+    }
+  ],
+  "metrics": [
+    {
+      "dataSource": "__DS_ID__",
+      "id": "__METRIC_ID__",
+      "aggregateIndicator": "__AGGREGATE__",
+      "frequency": "__FREQUENCY__",
+      "numberFormat": {
+        "customFormat": true,
+        "rounding": "HALF_UP",
+        "decimalPrecision": 0,
+        "abbreviationEnabled": true,
+        "numberInTooltipsEnabled": false,
+        "thousandSeparatorEnabled": false
+      },
+      "axisId": "primary"
+    }
+  ],
+  "headerTitle": "__TITLE__"
+}

@@ -1,0 +1,74 @@
+{
+  "dataSources": [
+    {
+      "allowRealTime": true,
+      "dataCategories": [
+        "trend",
+        "group",
+        "simple"
+      ],
+      "filterQuery": "__FILTER_QUERY__",
+      "id": "__DS_ID__",
+      "isDatabaseView": false,
+      "preferredVisualizations": [],
+      "sourceType": "table",
+      "tableOrViewName": "__TABLE__"
+    }
+  ],
+  "additionalGroupByConfig": [],
+  "allowAdditionalGroupByPerMetric": false,
+  "componentId": "",
+  "contextMenuActions": [],
+  "description": "",
+  "emptyStateAlignment": "vertical-centered",
+  "emptyStateContent": "There are no scores available for the selected criteria. Contact your admin for more info.",
+  "emptyStateHeading": "No data available.",
+  "emptyStateHeadingLevel": 3,
+  "emptyStateIllustration": "no-data",
+  "enableCustomEmptyState": false,
+  "enableDrilldown": true,
+  "enableRealTimeUpdate": false,
+  "filterConfigurations": "@state.parFilters",
+  "headingLevel": 2,
+  "metrics": [
+    {
+      "aggregateFunction": "COUNT",
+      "axisId": "primary",
+      "dataSource": "__DS_ID__",
+      "id": "__METRIC_ID__",
+      "numberFormat": {
+        "customFormat": false
+      }
+    }
+  ],
+  "showAdditionalGroupBySelector": false,
+  "showFilterIcon": true,
+  "showHeaderSeparator": false,
+  "showHeader": true,
+  "showLoadingIndicator": false,
+  "wrapTitle": false,
+  "parFilter": "",
+  "parFilterConfig": [],
+  "allowListPagination": true,
+  "columnLimit": "__COLUMN_LIMIT__",
+  "limit": 20,
+  "maxCharLimit": 4000,
+  "columnPreferenceKey": "",
+  "bareBorder": false,
+  "wrapCellContent": "useLineBreaksUserPref",
+  "showPersonalization": false,
+  "hideDotwalk": false,
+  "showColumnReorder": true,
+  "showColumnGrouping": true,
+  "showColumnResizing": true,
+  "showColumnFiltering": true,
+  "showColumnSorting": true,
+  "followFilters": true,
+  "groupByField": "",
+  "showLinks": true,
+  "showViewAll": true,
+  "showInlineEditing": true,
+  "columns": "__COLUMNS__",
+  "headerTitle": "__TITLE__",
+  "table": "__TABLE__"
+}

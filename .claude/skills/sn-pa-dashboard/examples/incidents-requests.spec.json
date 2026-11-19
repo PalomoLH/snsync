@@ -1,0 +1,452 @@
+{
+  "project": "projects/levidev",
+  "updateSet": "<ASK THE USER>",
+  "records": [
+    {
+      "key": "src_inc_open",
+      "table": "pa_cubes",
+      "existing": "b5cf2c23d7030100b96d45a3ce6103cc",
+      "note": "OOB Incidents.Open"
+    },
+    {
+      "key": "ind_inc_open",
+      "table": "pa_indicators",
+      "existing": "fb007202d7130100b96d45a3ce6103b4",
+      "note": "OOB Number of open incidents"
+    },
+    {
+      "key": "ind_req_open",
+      "table": "pa_indicators",
+      "existing": "e0fa913dd7200200b96d45a3ce6103b8",
+      "note": "OOB Number of open requests (sc_request)"
+    },
+    {
+      "key": "bk_inc_priority",
+      "table": "pa_breakdowns",
+      "existing": "0df47e02d7130100b96d45a3ce610399",
+      "note": "Priority → Incident.Priority (sys_choice)"
+    },
+    {
+      "key": "bk_req_priority",
+      "table": "pa_breakdowns",
+      "existing": "785a913dd7200200b96d45a3ce610386",
+      "note": "Priority for sc_request"
+    },
+    {
+      "key": "bk_group",
+      "table": "pa_breakdowns",
+      "existing": "baec0752bf130100b96dac808c0739ed",
+      "note": "Assignment Group → IT.Groups.Active"
+    },
+    {
+      "key": "bk_ci",
+      "table": "pa_breakdowns",
+      "existing": "45690504773e311017dea86eaf5a99cd",
+      "note": "Configuration Item (only mapped to cmdb_ci_outage)"
+    },
+    {
+      "key": "bm_ci_incident",
+      "table": "pa_breakdown_mappings",
+      "folder": "Configuration_Item__incident",
+      "fields": {
+        "breakdown": "@ref:bk_ci",
+        "facts_table": "incident",
+        "field": "cmdb_ci"
+      }
+    },
+    {
+      "key": "ib_inc_open_ci",
+      "table": "pa_indicator_breakdowns",
+      "folder": "Open_incidents__CI",
+      "fields": {
+        "indicator": "@ref:ind_inc_open",
+        "breakdown": "@ref:bk_ci",
+        "order": "800",
+        "display": "true"
+      }
+    },
+    {
+      "key": "ind_inc_open_total",
+      "table": "pa_indicators",
+      "fields": {
+        "name": "Number of open incidents (total)",
+        "description": "Denominator for % formulas. Keep WITHOUT breakdowns.",
+        "type": "1",
+        "cube": "@ref:src_inc_open",
+        "aggregate": "1",
+        "field": "active",
+        "unit": "17b365e2d7320100ba986f14ce6103ad",
+        "frequency": "10",
+        "direction": "1",
+        "precision": "0",
+        "value_when_nil": "0",
+        "collect_records": "false"
+      }
+    },
+    {
+      "key": "ind_inc_pct_group",
+      "table": "pa_indicators",
+      "fields": {
+        "name": "% of open incidents by assignment group",
+        "type": "2",
+        "formula": "( [[@ref:ind_inc_open]] / [[@ref:ind_inc_open_total]] ) * 100",
+        "unit": "f9c365e2d7320100ba986f14ce6103b8",
+        "frequency": "10",
+        "direction": "1",
+        "precision": "2"
+      }
+    },
+    {
+      "key": "ind_inc_pct_priority",
+      "table": "pa_indicators",
+      "fields": {
+        "name": "% of open incidents by priority",
+        "type": "2",
+        "formula": "( [[@ref:ind_inc_open]] / [[@ref:ind_inc_open_total]] ) * 100",
+        "unit": "f9c365e2d7320100ba986f14ce6103b8",
+        "frequency": "10",
+        "direction": "1",
+        "precision": "2"
+      }
+    },
+    {
+      "key": "ib_pct_group",
+      "table": "pa_indicator_breakdowns",
+      "folder": "Pct_open_incidents__Group",
+      "fields": {
+        "indicator": "@ref:ind_inc_pct_group",
+        "breakdown": "@ref:bk_group",
+        "order": "100",
+        "display": "true"
+      }
+    },
+    {
+      "key": "ib_pct_priority",
+      "table": "pa_indicator_breakdowns",
+      "folder": "Pct_open_incidents__Priority",
+      "fields": {
+        "indicator": "@ref:ind_inc_pct_priority",
+        "breakdown": "@ref:bk_inc_priority",
+        "order": "100",
+        "display": "true"
+      }
+    },
+    {
+      "key": "dash",
+      "table": "par_dashboard",
+      "fields": {
+        "name": "Incidents and Requests",
+        "description": "Open incidents and requests by priority, group and CI",
+        "active": "true",
+        "grid": "48"
+      }
+    },
+    {
+      "key": "tab_inc",
+      "table": "par_dashboard_tab",
+      "folder": "Incidents_and_Requests__Incidents",
+      "fields": {
+        "name": "Incidents",
+        "dashboard": "@ref:dash",
+        "order": "0",
+        "active": "true"
+      }
+    },
+    {
+      "key": "tab_req",
+      "table": "par_dashboard_tab",
+      "folder": "Incidents_and_Requests__Requests",
+      "fields": {
+        "name": "Requests",
+        "dashboard": "@ref:dash",
+        "order": "1",
+        "active": "true"
+      }
+    },
+    {
+      "key": "cv_root",
+      "table": "par_dashboard_canvas",
+      "folder": "Incidents_and_Requests__root",
+      "fields": {
+        "dashboard": "@ref:dash"
+      }
+    },
+    {
+      "key": "cv_inc",
+      "table": "par_dashboard_canvas",
+      "folder": "Incidents_and_Requests__Incidents",
+      "fields": {
+        "dashboard": "@ref:dash",
+        "dashboard_tab": "@ref:tab_inc"
+      }
+    },
+    {
+      "key": "cv_req",
+      "table": "par_dashboard_canvas",
+      "folder": "Incidents_and_Requests__Requests",
+      "fields": {
+        "dashboard": "@ref:dash",
+        "dashboard_tab": "@ref:tab_req"
+      }
+    },
+    {
+      "key": "f_inc_priority",
+      "table": "par_dashboard_widget",
+      "fields": {
+        "name": "Priority",
+        "canvas": "@ref:cv_inc",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 4
+      },
+      "folder": "IR_Inc_filter_Priority",
+      "template": "filter_breakdown",
+      "vars": {
+        "BREAKDOWN": "@ref:bk_inc_priority",
+        "BREAKDOWN_SOURCE_NAME": "Incident.Priority",
+        "IS_CHOICE": true,
+        "ELEMENT_TABLE": "sys_choice",
+        "TAB": "@ref:tab_inc",
+        "TARGETS": [
+          {
+            "type": "table",
+            "field": {
+              "id": "priority",
+              "type": "choice"
+            },
+            "table": {
+              "id": "incident"
+            }
+          },
+          {
+            "type": "pa",
+            "breakdown": {
+              "sysId": "@ref:bk_inc_priority",
+              "breakdownSourceName": "Incident.Priority",
+              "isOfChoiceType": true,
+              "type": "AUTOMATED",
+              "factsTable": "sys_choice",
+              "field": "sys_id",
+              "targetTable": "sys_choice"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "key": "f_inc_group",
+      "table": "par_dashboard_widget",
+      "fields": {
+        "name": "Assignment Group",
+        "canvas": "@ref:cv_inc",
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 4
+      },
+      "folder": "IR_Inc_filter_Group",
+      "template": "filter_breakdown",
+      "vars": {
+        "BREAKDOWN": "@ref:bk_group",
+        "BREAKDOWN_SOURCE_NAME": "Groups",
+        "IS_CHOICE": false,
+        "ELEMENT_TABLE": "sys_user_group",
+        "TAB": "@ref:tab_inc",
+        "TARGETS": [
+          {
+            "type": "table",
+            "field": {
+              "id": "assignment_group",
+              "type": "reference"
+            },
+            "table": {
+              "id": "incident"
+            }
+          },
+          {
+            "type": "pa",
+            "breakdown": {
+              "sysId": "@ref:bk_group",
+              "breakdownSourceName": "Groups",
+              "isOfChoiceType": false,
+              "type": "AUTOMATED",
+              "factsTable": "sys_user_group",
+              "field": "sys_id",
+              "targetTable": "sys_user_group"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "key": "w_inc_open",
+      "table": "par_dashboard_widget",
+      "fields": {
+        "name": "Open incidents",
+        "canvas": "@ref:cv_inc",
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 7
+      },
+      "folder": "IR_Inc_Open",
+      "template": "single_score_indicator",
+      "vars": {
+        "INDICATOR": "@ref:ind_inc_open"
+      }
+    },
+    {
+      "key": "w_inc_by_priority",
+      "table": "par_dashboard_widget",
+      "fields": {
+        "name": "Open incidents by priority",
+        "canvas": "@ref:cv_inc",
+        "x": 0,
+        "y": 11,
+        "w": 24,
+        "h": 14
+      },
+      "folder": "IR_Inc_by_Priority",
+      "template": "column_breakdown_indicator",
+      "vars": {
+        "INDICATOR": "@ref:ind_inc_open",
+        "BREAKDOWN": "@ref:bk_inc_priority",
+        "IS_CHOICE": true
+      }
+    },
+    {
+      "key": "w_inc_by_group",
+      "table": "par_dashboard_widget",
+      "fields": {
+        "name": "Open incidents by assignment group",
+        "canvas": "@ref:cv_inc",
+        "x": 24,
+        "y": 11,
+        "w": 24,
+        "h": 14
+      },
+      "folder": "IR_Inc_by_Group",
+      "template": "column_breakdown_indicator",
+      "vars": {
+        "INDICATOR": "@ref:ind_inc_open",
+        "BREAKDOWN": "@ref:bk_group",
+        "MAX_GROUPS": 10
+      }
+    },
+    {
+      "key": "w_inc_by_ci",
+      "table": "par_dashboard_widget",
+      "fields": {
+        "name": "Open incidents by configuration item",
+        "canvas": "@ref:cv_inc",
+        "x": 0,
+        "y": 25,
+        "w": 24,
+        "h": 14
+      },
+      "folder": "IR_Inc_by_CI",
+      "template": "column_breakdown_indicator",
+      "vars": {
+        "INDICATOR": "@ref:ind_inc_open",
+        "BREAKDOWN": "@ref:bk_ci",
+        "MAX_GROUPS": 10
+      }
+    },
+    {
+      "key": "w_inc_pct_group",
+      "table": "par_dashboard_widget",
+      "fields": {
+        "name": "% of open incidents by group",
+        "canvas": "@ref:cv_inc",
+        "x": 24,
+        "y": 25,
+        "w": 24,
+        "h": 14
+      },
+      "folder": "IR_Inc_Pct_Group",
+      "template": "donut_breakdown_indicator",
+      "vars": {
+        "INDICATOR": "@ref:ind_inc_pct_group",
+        "INDICATOR_TYPE": "2",
+        "BREAKDOWN": "@ref:bk_group",
+        "MAX_GROUPS": 10
+      }
+    },
+    {
+      "key": "w_inc_pct_priority",
+      "table": "par_dashboard_widget",
+      "fields": {
+        "name": "% of open incidents by priority",
+        "canvas": "@ref:cv_inc",
+        "x": 0,
+        "y": 39,
+        "w": 24,
+        "h": 14
+      },
+      "folder": "IR_Inc_Pct_Priority",
+      "template": "donut_breakdown_indicator",
+      "vars": {
+        "INDICATOR": "@ref:ind_inc_pct_priority",
+        "INDICATOR_TYPE": "2",
+        "BREAKDOWN": "@ref:bk_inc_priority",
+        "IS_CHOICE": true
+      }
+    },
+    {
+      "key": "w_req_open",
+      "table": "par_dashboard_widget",
+      "fields": {
+        "name": "Open requests",
+        "canvas": "@ref:cv_req",
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 7
+      },
+      "folder": "IR_Req_Open",
+      "template": "single_score_indicator",
+      "vars": {
+        "INDICATOR": "@ref:ind_req_open"
+      }
+    },
+    {
+      "key": "w_req_by_priority",
+      "table": "par_dashboard_widget",
+      "fields": {
+        "name": "Open requests by priority",
+        "canvas": "@ref:cv_req",
+        "x": 0,
+        "y": 7,
+        "w": 24,
+        "h": 14
+      },
+      "folder": "IR_Req_by_Priority",
+      "template": "column_breakdown_indicator",
+      "vars": {
+        "INDICATOR": "@ref:ind_req_open",
+        "BREAKDOWN": "@ref:bk_req_priority",
+        "IS_CHOICE": true
+      }
+    },
+    {
+      "key": "w_req_by_group",
+      "table": "par_dashboard_widget",
+      "fields": {
+        "name": "Open requests by assignment group",
+        "canvas": "@ref:cv_req",
+        "x": 24,
+        "y": 7,
+        "w": 24,
+        "h": 14
+      },
+      "folder": "IR_Req_by_Group",
+      "template": "column_breakdown_indicator",
+      "vars": {
+        "INDICATOR": "@ref:ind_req_open",
+        "BREAKDOWN": "@ref:bk_group",
+        "MAX_GROUPS": 10
+      }
+    }
+  ]
+}

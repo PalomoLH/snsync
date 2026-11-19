@@ -1,0 +1,114 @@
+{
+  "applyDateRange": false,
+  "bareBorder": false,
+  "chartVariation": "side-by-side",
+  "colorConfig": {
+    "type": "default"
+  },
+  "configVersion": "23.0.0-ci-SNAPSHOT",
+  "dataSources": [
+    {
+      "allowRealTime": true,
+      "allowTotalValue": true,
+      "dataCategories": [
+        "group",
+        "simple",
+        "trend"
+      ],
+      "id": "__DS_ID__",
+      "indicatorType": "__INDICATOR_TYPE__",
+      "isScriptedIndicator": false,
+      "label": "__LABEL__",
+      "preferredVisualizations": [
+        "18ac962264404bcc0039359d184b15f3"
+      ],
+      "sourceType": "indicator",
+      "uuid": {
+        "indicator": "__INDICATOR__",
+        "breakdowns": []
+      }
+    }
+  ],
+  "dateFormat": "default",
+  "disableTooltip": false,
+  "emptyStateAlignment": "vertical-centered",
+  "emptyStateContent": "There are no scores available for the selected criteria. Contact your admin for more info.",
+  "emptyStateHeading": "No data available.",
+  "emptyStateIllustration": "no-data",
+  "enableCustomEmptyState": false,
+  "enableDrilldown": true,
+  "extensionType": "bar",
+  "filterConfigurations": "@state.parFilters",
+  "followFilters": true,
+  "groupBy": [],
+  "headerTitle": "__TITLE__",
+  "hideMatrixAggregate": false,
+  "hideYAxis0": false,
+  "hideYAxis1": false,
+  "hideYAxis2": false,
+  "hideYAxis3": false,
+  "hideYAxis4": false,
+  "legendExpandToFit": true,
+  "legendHorizontalAlignment": "center",
+  "legendPosition": "bottom",
+  "lineStrokeWidth": "2",
+  "metrics": [
+    {
+      "dataSource": "__DS_ID__",
+      "id": "__METRIC_ID__",
+      "aggregateIndicator": "__AGGREGATE__",
+      "frequency": "__FREQUENCY__",
+      "label": "__LABEL__",
+      "numberFormat": {
+        "customFormat": false
+      },
+      "chartType": "bar",
+      "axisId": "__AXIS__"
+    }
+  ],
+  "newReporting": false,
+  "numberOfPeriods": "__PERIODS__",
+  "period": "M",
+  "refreshFrequency": false,
+  "scoreType": "latest",
+  "showAbsolutePeriod": false,
+  "showBorder": true,
+  "showComment": false,
+  "showConfidenceBand": false,
+  "showDataLabels": false,
+  "showDataPassthrough": false,
+  "showFilterIcon": true,
+  "showFirstGroupAggregate": false,
+  "showForecast": false,
+  "showForecastRange": false,
+  "showHeader": true,
+  "showHeaderSeparator": true,
+  "showLegend": true,
+  "showLegendValue": false,
+  "showMaximumRange": false,
+  "showSecondGroupAggregate": false,
+  "showSubAggregate": false,
+  "showTarget": false,
+  "showThreshold": false,
+  "showTotalAggregate": false,
+  "showTotalValue": null,
+  "showTrend": false,
+  "showXGrid": true,
+  "showYGrid": true,
+  "sortBy": "value",
+  "sortByOrder": "desc",
+  "telemetry": "null",
+  "trendBy": {
+    "trendByFields": [],
+    "trendByFrequency": "date"
+  },
+  "wrapTitle": false,
+  "yAxisStyle": "default",
+  "allowChangeDateRange": true,
+  "showDateRangeByDefault": true,
+  "additionalGroupByConfig": null,
+  "componentId": "acgny192",
+  "noDebounce": "",
+  "showChangeFrom": null,
+  "dataCategory": "group"
+}
