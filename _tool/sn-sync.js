@@ -57,6 +57,10 @@ if (!fs.existsSync(envPath)) {
 
 // Loads local .env variables
 require("dotenv").config({ path: envPath });
+// Normalize instance URL (a trailing slash would produce "//oauth_auth.do")
+if (process.env.SN_INSTANCE) {
+  process.env.SN_INSTANCE = process.env.SN_INSTANCE.trim().replace(/\/+$/, "");
+}
 
 // --- EXTRA ENVIRONMENT VARIABLES (ZSH) ---
 const SN_ENC_SECRET = process.env.SN_ENC_SECRET; // Secret to encrypt the token at rest
@@ -222,7 +226,16 @@ async function startBrowserLogin() {
     });
 
     server = app.listen(3000, async () => {
-      const authUrl = `${CONFIG.oauth.authUrl}?response_type=code&client_id=${CONFIG.oauth.clientId}&redirect_uri=${encodeURIComponent(CONFIG.oauth.redirectUri)}&state=${oauthState}&scope=openid profile email`;
+      const authParams = new URLSearchParams({
+        response_type: "code",
+        client_id: CONFIG.oauth.clientId,
+        redirect_uri: CONFIG.oauth.redirectUri,
+        state: oauthState,
+      });
+      if (process.env.SN_OAUTH_SCOPE) {
+        authParams.set("scope", process.env.SN_OAUTH_SCOPE);
+      }
+      const authUrl = `${CONFIG.oauth.authUrl}?${authParams.toString()}`;
       console.log(`🚀 Opening browser for login: ${authUrl}`);
       await open(authUrl);
     });
@@ -239,12 +252,16 @@ async function getValidToken() {
       const tokenData = loadTokenCache();
 
       // --- SECURITY CHECK: INACTIVITY TIMEOUT ---
-      const IDLE_TIMEOUT = 20 * 60 * 1000; // 20 minutes
+      // Minutes of inactivity before a fresh browser login is required.
+      // Override with SN_IDLE_TIMEOUT_MINUTES (in .env or the shell). Default: 30 days.
+      const idleMinutes =
+        parseInt(process.env.SN_IDLE_TIMEOUT_MINUTES, 10) || 24 * 60 * 30;
+      const IDLE_TIMEOUT = idleMinutes * 60 * 1000;
       if (
         tokenData.last_used_at &&
         Date.now() - tokenData.last_used_at > IDLE_TIMEOUT
       ) {
-        console.warn("\n🔒 Session expired due to inactivity (+20min).");
+        console.warn(`\n🔒 Session expired due to inactivity (+${idleMinutes}min).`);
         console.warn("   For security, please login again.");
         fs.removeSync(CONFIG.tokenCache);
         // Force fall through to login flow below
@@ -314,6 +331,28 @@ snClient.interceptors.request.use(async (reqConfig) => {
   }
   return reqConfig;
 });
+
+snClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (
+      AUTH_MODE === "OAUTH_BROWSER" &&
+      (error.response?.status === 401 ||
+        (error.response?.status === 403 &&
+          error.response?.data?.error?.detail?.includes("scope")))
+    ) {
+      if (fs.existsSync(CONFIG.tokenCache)) {
+        try {
+          fs.removeSync(CONFIG.tokenCache);
+          console.warn(
+            "   ⚠️  Removed cached OAuth token due to authorization failure.",
+          );
+        } catch (_) {}
+      }
+    }
+    return Promise.reject(error);
+  },
+);
 
 // No complex retry interceptor needed, the preventive logic above solves it
 function loadMappingConfig() {
@@ -519,9 +558,15 @@ async function pullCatalogItem(sysId, contextAction = "skip") {
             !f.startsWith(".")
           );
         });
-        if (items.length > 0) {
-          catalogItemName = items[0];
-        }
+        // Match on .sys_id: the folder may already hold other catalog items
+        catalogItemName =
+          items.find((f) => {
+            const idFile = path.join(itemPath, f, ".sys_id");
+            return (
+              fs.existsSync(idFile) &&
+              fs.readFileSync(idFile, "utf8").trim() === sysId
+            );
+          }) || null;
       }
     }
   }
@@ -1469,6 +1514,11 @@ async function createRecordInServiceNow(
       payload.sys_scope = scopeSysId;
       console.log(`   🏷️  Scope: ${snDefaultScope}`);
     }
+  } else if (!payload.sys_scope) {
+    // Without an explicit scope ServiceNow uses the API user's current
+    // application, so a "global" record can silently land in a scoped app.
+    payload.sys_scope = "global";
+    console.log(`   🏷️  Scope: global`);
   }
 
   // 2. POST (Create)
@@ -2595,8 +2645,13 @@ async function createUpdateSet(name, scopeParam) {
     }
   }
 
-  const payload = { name, state: "in progress" };
-  if (applicationSysId) payload.application = applicationSysId;
+  // Always send the application: left out, ServiceNow uses the API user's
+  // current application, so a "global" Update Set can become a scoped one.
+  const payload = {
+    name,
+    state: "in progress",
+    application: applicationSysId || "global",
+  };
 
   console.log(
     `📋 Creating Update Set: "${name}" [scope: ${resolvedScopeName}]...`,

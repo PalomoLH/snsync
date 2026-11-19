@@ -266,10 +266,14 @@
             "id": "pickProject",
             "type": "promptString",
             "description": "Relative project folder (e.g., projects/my-project):",
-            "default": "projects/cibradev",
+            "default": "projects/levidev",
             "options": [
-                "projects/cibradev",
-                "projects/rdsldev"
+                "projects/leviaskhr",
+                "projects/levidev",
+                "projects/leviprod",
+                "projects/levisandbox",
+                "projects/levistaging",
+                "projects/levitest"
             ]
         },
         {

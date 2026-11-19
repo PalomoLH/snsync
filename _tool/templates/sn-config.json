@@ -686,6 +686,215 @@
         "sys_update_set": {
             "onlyContext": true,
             "filter": "sys_idISNOTEMPTY"
+        },
+        "par_dashboard": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": [],
+            "jsonExport": [
+                "name",
+                "description",
+                "active",
+                "grid",
+                "certified",
+                "base_dashboard",
+                "experience",
+                "sys_scope"
+            ],
+            "saveContext": false
+        },
+        "par_dashboard_tab": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": [],
+            "jsonExport": [
+                "name",
+                "dashboard",
+                "order",
+                "active",
+                "background_color",
+                "sys_scope"
+            ],
+            "saveContext": false
+        },
+        "par_dashboard_canvas": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": [
+                "layout"
+            ],
+            "ext": {
+                "layout": "json"
+            },
+            "jsonExport": [
+                "dashboard",
+                "dashboard_tab",
+                "sys_scope"
+            ],
+            "saveContext": false
+        },
+        "par_dashboard_widget": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": [
+                "component_props",
+                "widget_props"
+            ],
+            "ext": {
+                "component_props": "json",
+                "widget_props": "json"
+            },
+            "jsonExport": [
+                "name",
+                "canvas",
+                "component",
+                "visualization",
+                "stored_component",
+                "x",
+                "y",
+                "w",
+                "h",
+                "sys_scope"
+            ],
+            "saveContext": false
+        },
+        "pa_cubes": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": [
+                "conditions"
+            ],
+            "ext": {
+                "conditions": "txt"
+            },
+            "jsonExport": [
+                "name",
+                "description",
+                "facts_table",
+                "frequency",
+                "calendar",
+                "report_source",
+                "sys_scope"
+            ],
+            "saveContext": false
+        },
+        "pa_indicators": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": [
+                "formula",
+                "conditions"
+            ],
+            "ext": {
+                "formula": "txt",
+                "conditions": "txt"
+            },
+            "jsonExport": [
+                "name",
+                "description",
+                "type",
+                "cube",
+                "aggregate",
+                "field",
+                "distinct",
+                "distinct_field",
+                "unit",
+                "frequency",
+                "direction",
+                "precision",
+                "value_when_nil",
+                "formula_allow_null",
+                "formula_aggregate_whole",
+                "collect_records",
+                "collect_breakdown_matrix",
+                "key",
+                "display",
+                "active",
+                "sys_scope"
+            ],
+            "saveContext": false
+        },
+        "pa_dimensions": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": [
+                "conditions"
+            ],
+            "ext": {
+                "conditions": "txt"
+            },
+            "jsonExport": [
+                "name",
+                "description",
+                "facts_table",
+                "field",
+                "empty_value",
+                "active",
+                "sys_scope"
+            ],
+            "saveContext": false
+        },
+        "pa_breakdowns": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": [],
+            "jsonExport": [
+                "name",
+                "description",
+                "dimension",
+                "type",
+                "display",
+                "scripted",
+                "script",
+                "sys_scope"
+            ],
+            "saveContext": false
+        },
+        "pa_breakdown_mappings": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": [],
+            "jsonExport": [
+                "breakdown",
+                "facts_table",
+                "field",
+                "scripted",
+                "script",
+                "sys_scope"
+            ],
+            "saveContext": false
+        },
+        "pa_indicator_breakdowns": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": [],
+            "jsonExport": [
+                "indicator",
+                "breakdown",
+                "order",
+                "display",
+                "sys_scope"
+            ],
+            "saveContext": false
+        },
+        "pa_job_indicators": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": [],
+            "jsonExport": [
+                "job",
+                "indicator",
+                "active",
+                "sys_scope"
+            ],
+            "saveContext": false
+        },
+        "sys_update_xml": {
+            "filter": "sys_updated_onONToday@javascript:gs.beginningOfToday()@javascript:gs.endOfToday()",
+            "fields": [
+                "payload"
+            ],
+            "jsonExport": [
+                "name",
+                "type",
+                "target_name",
+                "update_set",
+                "sys_updated_on",
+                "sys_created_by"
+            ],
+            "saveContext": false,
+            "ext": {
+                "payload": "xml"
+            }
         }
     }
 }
